@@ -1,0 +1,497 @@
+---
+title: "Tutorial 4 - Visualising uncertainty"
+author: 
+  - name: "Bahman Rostami-Tabar"
+    affiliation: "Professor, Director, Data Lab for Social Godo Reserach Group, Cardiff Business School"
+    affiliation-url: "https://profiles.cardiff.ac.uk/staff/rostami-tabarb"
+  - name: "Amir (Hossein) Ghadiri"
+    affiliation: "PhD student, Cardiff Business School"
+    affiliation-url: "https://amirhosseinghdv.github.io/"  
+  - name: "Mustafa Aslan"
+    affiliation: "PhD student, Cardiff Business School"
+    affiliation-url: "https://profiles.cardiff.ac.uk/research-staff/aslanm"  
+date: 29 October 2026
+format:
+  html:
+    code-fold: true    # allow folding of code blocks
+    toc: true
+    toc-depth: 2
+  pdf: 
+    toc: true          # include a table of contents
+    number-sections: true
+execute:
+  cache: true          # cache code chunks
+  echo: true           # whether to show code
+  eval: false           # whether to run code
+  warning: false       # suppress warnings
+  message: false       # suppress messages
+---
+
+```{r}
+#| label: setup
+#| include: false
+
+library(tidyverse)
+library(here)
+library(forcats)
+library(ggridges)
+library(ggthemes)
+library(ggforce)
+library(ggdist)
+library(patchwork)
+
+gapminder <- read_csv(here("data/gapminder_all.csv")) |> 
+  mutate(continent = countrycode(country, origin = "country.name", destination = "continent"), decade = floor(year/10)*10) |> janitor::clean_names() |> filter(year <= 2024) |> drop_na()
+gapminder_2024 <- gapminder |> filter(year == 2024)
+
+```
+
+
+# Learning objectives
+
+- Create uncertainty-aware distribution visuals (e.g., histograms/densities, dot/violin/box hybrids).
+- Use Gapminder columns—`gdpPercap`, `lifeExp`, and `pop`—to build clear visuals representing uncertainty.
+
+
+# Overview
+
+This tutorial introduces visualising uncertainty in R using the Gapminder dataset, a classic resource for exploring global trends in health, wealth, and population.
+We will use the tidyverse and ggplot2 packages to investigate how uncertainty arises not from random noise or model fitting, but from data.
+
+Through Gapminder’s country-level indicators (lifeExp, gdpPercap, and pop), we’ll practice building visuals that express variation, inequality, and interpretive uncertainty using plots of the data itself.
+
+We will work through three tiers of practice:
+
+- **Section 1** — Run-only: fully working code you can execute to reproduce figures.
+
+- **Section 2** — Fill-in-the-blanks: guided code snippets with ??? placeholders to complete.
+
+- **Section 3** — No code: conceptual questions where you create the visuals from scratch.
+
+## What questions can we address with this data?
+
+
+Here are some guiding questions:
+
+Unit of analysis: How do results differ if we treat each country as equally important versus weighting by population?
+
+- What does the distribution of GDP per capita look like across countries and continents?
+
+- Hoes does life expectency varies across continents?
+
+- How tightly connected are life expectancy and income, and how variable is that relationship by continents?
+
+These questions will guide the plots you build, the decisions you make about weighting and scaling, and how you interpret what “uncertainty” means in data visualisation — even before introducing any statistical model.
+
+# Dataset
+
+The Gapminder dataset provides country-level indicators of development, capturing how health, wealth, and population have changed across the world from 1952 to 2007.
+Each observation represents a country–year pair, enabling both cross-sectional and temporal exploration of economic and demographic trends.
+
+**Columns:**
+
+- `country` — country name (character)
+
+- `continent` — continent to which the country belongs (factor)
+
+- `year` — observation year (integer, from 1952 to 2007, every 5 years)
+
+- `lex` — average life expectancy at birth (years)
+
+- `pop` — total population (number of people)
+
+- `gdp_pcap` — gross domestic product per capita (US dollars, inflation-adjusted)
+
+These variables allow us to visualise differences in living standards across time and geography.
+
+By combining them, we can examine variation, inequality, and uncertainty — for instance, how income or life expectancy distributions differ between continents, or how population weighting changes the story.
+
+
+# Section 1: Run the code 
+
+Please run the code below and observe the output, try to undestad the code, and link it to elements of the visualisation! Before that, let's have a quick look at the data
+
+```{r}
+# Missingness overview
+gapminder_2024 |>
+  skimr::skim()
+```
+
+
+## Histograms
+
+Start with a histogram of **life expectancy** (`lifeExp`). Use `geom_histogram()`.
+
+```{r}
+#| label: lifeexp-hist
+ggplot(data = gapminder_2024, mapping  = aes(x = lex)) +
+ geom_histogram() +
+  labs(x= "Life Expectency")
+```
+
+Control binning by setting `binwidth` and `center`.  Try `binwidth = 5` and `center = 2.5`. You can change and run to see how it affaects the hsitorgram.
+
+```{r}
+#| label: lifeexp-hist-options
+ggplot(data = gapminder_2024, mapping = aes(x = lex)) +
+ geom_histogram(binwidth = 2, center = 2.5) +
+  labs(x= "Life Expectency")
+```
+
+
+Try a few different binwidths (e.g., .2, 2, 50). What `center` values work well with those choices?
+
+
+```{r}
+ggplot(data = gapminder_2024, mapping =aes(x = lex)) +
+ geom_histogram(binwidth = .2, center = 2.5, color = "red") +
+  labs(x= "Life Expectency")
+```
+
+try to chage `boundary = 5`, how it affects the histogram?
+
+```{r}
+ggplot(data = gapminder_2024,
+ mapping = aes(x = lex)) +
+ geom_histogram(color = "#6d8196", boundary = 5) +
+  labs(x= "Life Expectency")
+```
+
+## Density plots
+
+Now draw a density plot of `lifeExp` with `geom_density()`. Fill the area with a color like `"#4682B4"`. Check more colors here: https://www.figma.com/colors/
+
+```{r}
+ggplot(data = gapminder_2024, mapping = aes(x = lex)) +
+ geom_density(fill = "#4682B4", color = "#d3d3d3")
+```
+
+
+Adjust the level of smoothing by changing the bandwidth (`bw`), and try different kernels (e.g., `"rectangular"`, `"triangular"`, `"gaussian). Use `bw = 1` and a triangular kernel.
+
+Try a few more bandwidths (e.g., 0.5, 10) and kernels (e.g., `"gaussian"`). How does the density change?
+
+```{r}
+ggplot(data = gapminder_2024, mapping = aes(x = lex)) +
+ geom_density(fill = "#4682B4", color = "#d3d3d3", bw = 1, kernel = "gaussian")
+```
+
+## Section 2 — Fill-in-the-blanks
+
+## Small multiples (facets)
+
+Now, let’s start by exploring how life expectancy (lex) is distributed across continents using a simple histogram.
+
+```{r}
+ggplot(data = gapminder,
+mapping = aes(x = lex, fill = continent)) +
+ geom_histogram(binwidth = 5,
+ color = "white",
+ boundary = 50)
+```
+
+Is this a good plot?
+
+Create small-multiple histograms by **continent**:
+
+```{r}
+ggplot(data = ???, mapping = ???(lex)) +
+  geom_histogram(binwidth = 5, center = 2.5) +
+  ???(vars(continent))
+```
+
+Finally, make **density** plots with the same facets.
+
+```{r}
+ggplot(data = ???, mapping = ???(lex)) +
+  ???(fill = "#4682B4") +
+  facet_wrap(vars(???))
+```
+
+When comparing distributions across groups — such as continents — it’s often useful to overlay multiple density curves in the same plot. However, overlapping filled shapes can easily obscure one another. To address this, we use transparency (controlled by the `alpha` parameter with a value between 0 and 1) so that areas of overlap remain visible.
+
+```{r}
+ggplot(data = gapminder, aes(x = lex, fill = continent)) +
+ geom_density(alpha = ???) +
+ ggthemes::scale_fill_colorblind()
+```
+
+When visualising distributions for several groups, plotting them all on top of one another can quickly become cluttered. `Ridge plots` solve this by stacking density curves vertically, aligning them along a shared axis (such as life expectancy) while offsetting each group slightly along another axis (for example, continent or year).
+
+This layout makes it easier to compare the shape, spread, and overlap of multiple distributions at once without losing clarity.
+
+```{r}
+ggplot(gapminder_2024, aes(x = lex, y = continent)) +
+ geom_density_ridges()
+```
+
+## Boxplots and violins
+
+Draw the distribution of life expectancy by **continent** in 2024 using a **boxplot**.
+
+```{r}
+ggplot(data = gapminder_2024, mapping = aes(x = lex, y = continent)) +
+???()
+```
+
+Now do the same with **violins** (`geom_violin()`).
+
+```{r}
+
+```
+
+
+Try customizations:
+- Change fill.
+- Swap x/y.
+- Change `bw`/`kernel` like in `geom_density()`.
+
+
+Next, let’s visualise each country’s life expectancy in 2024 as individual points using a strip chart.
+
+A strip chart places all observations along a single axis, allowing us to see how values cluster or spread within each group — in this case, within continents. It's always useful to see the raw data as they re rater than in compact form such as boxplot, violin, etc!
+
+Use the code below as a starting point and adjust the aesthetics to improve readability.
+
+:::{.callout-tip}
+Hint: set size = 0.75 to make the points smaller and prevent excessive overlap.
+:::
+
+```{r}
+ggplot(data = gapminder_2024, mapping = aes(x = continent, y = lex)) +
+  geom_point(size = 0.75)
+```
+
+Add **jitter** with `position_jitter(width = 0.15, height = 0)`.
+Try to change `widtha, and `height`, 
+
+What happens when you change/remove `height` and `width`?
+
+```{r}
+ggplot(data = gapminder_2024, mapping = aes(x = continent, y = lex)) +
+  geom_point(
+    size = 0.75,
+    alpha = .5,
+    position = ???(width = 0.15, height = 0)
+  )
+```
+
+Fix the random layout with a `seed`:
+
+```{r}
+set.seed(1234)
+ggplot(gapminder_2024, aes(x = continent, y = lex)) +
+  geom_point(
+    size = 0.75,
+    alpha = .5,
+    position = position_jitter(width = 0.15, height = 0)
+  )
+```
+
+Now, let’s create a `sina plot` to visualise the distribution of life expectancy by continent for the year 2024.
+
+A sina plot combines features of a violin plot and a strip chart — it spreads individual data points horizontally based on their density, showing both the overall shape of the distribution and the individual observations.
+
+
+```{r}
+ggplot(data = gapminder_2024, mapping = aes(x = continent, y = lex)) +
+  geom_sina(size = 0.75)
+```
+
+Overlay sina on a violin:
+
+```{r}
+ggplot(data = gapminder_2024, mapping = aes(x = continent, y = lex)) +
+  ???(color = "#DE5D83", fill = "#A8C3BC") +
+  ???(size = 0.75)
+```
+
+change color to NA, what wll happen? what if you remove color?
+
+Let’s visualise the distribution of life expectancy by continent using a combination of violin and box plots for the 2024 data.
+
+```{r}
+  ggplot(data = gapminder_2024, mapping = aes(x = continent, y = lex)) + 
+  geom_violin(fill = "grey90") + 
+  geom_boxplot(width = .2)+
+  theme_half_open()
+```
+
+This plot combines violin, boxplot, and jittered points to show both the overall distribution and the individual country values of life expectancy by continent.
+
+```{r}
+  ggplot(gapminder_2024, aes(x = continent, y = lex)) + 
+  ???(fill = "grey90") + 
+  ???(width = .2)+
+   ???(
+    alpha = .5,
+    size = 1,
+    position = ???(width = 0.15, height = 0, seed = 1)
+  ) +
+  labs(
+    title = "Life Expectancy by Continent (2007)",
+    subtitle = "Violin + boxplot + jittered data points",
+    x = "Continent",
+    y = "Life Expectancy"
+  ) +
+  theme_half_open()
+```
+
+
+Ridgeline plots stack densities vertically. Map the grouping variable to **y** and the numeric variable to **x**. Use 2024 data.
+
+What happens if you use `gdp_pcap` instead of `lifeExp`? Why?
+
+```{r}
+ggplot(gapminder_2024, aes(x = ???, y = continent)) +
+  ???() +
+  theme_half_open()
+```
+
+Prune long tails with `rel_min_height`:
+
+```{r}
+ggplot(data = gapminder_2024, mapping = aes(x = gdp_pcap, y = continent)) +
+  geom_density_ridges(??? = 0.001) +
+   theme_half_open()
+```
+
+This visual combines a histogram, density plot, and rug plot to show the overall distribution, smooth shape, and individual data points for life expectancy in 2024.
+
+```{r}
+ggplot(gapminder_2024, aes(lex)) +
+  geom_histogram(aes(y = after_stat(density)),
+                 bins = 100, fill = "grey85", color = "white") +
+  geom_density(linewidth = 1) +
+  ???(alpha = 0.4) +
+  labs(title = "Histogram + Density + Rug (Gapminder 2007)",
+       subtitle = "Rug shows raw data; density adds shape; histogram shows frequency",
+       x = "Life Expectancy",
+       y = "Density") +
+  theme_minimal()
+```
+
+In this plot, we combine three layers — a half-eye density, a boxplot, and a dot distribution — to visualise both the shape and the individual observations of life expectancy across continents.
+
+The half-eye shows the smooth distribution and highlights areas of higher density, the boxplot summarises key statistics such as the median and interquartile range, and the dot layer reveals the underlying data points.
+
+```{r}
+
+# Plot
+ggplot(gapminder_2024, aes(continent, lex)) + 
+  ggdist::stat_halfeye(
+    adjust = .5,
+    width = .3,
+    .width = 0,
+    justification = -.3,
+    point_colour = NA
+  ) +
+  ???(
+    width = .1,
+    outlier.shape = NA,
+    alpha = 0.4
+  ) +
+  ggdist::???(
+    side = "left",
+    dotsize = .3,
+    justification = 1.1,
+    binwidth = .8
+  ) +
+  labs(
+    title = "Life Expectancy by Continent (2007)",
+    subtitle = "Half-eye (density) + boxplot + dot distribution (left side)",
+    x = "Continent",
+    y = "Life Expectancy"
+  ) +
+  theme_few()
+
+```
+
+In this visual, we layer a half-eye plot, a boxplot, and jittered points to show both the overall distribution and the individual country values of life expectancy by continent.
+
+The half-eye displays the smooth density shape, the boxplot summarises key statistics (like the median and spread), and the jittered points reveal individual observations, preventing overlap and adding transparency to the underlying variability.
+This combination provides a balanced view of central tendency, spread, and data uncertainty across continents.
+
+```{r}
+ggplot(gapminder_2024, aes(continent, lex)) + 
+  ggdist::stat_halfeye(
+    adjust = .5, width = .3, .width = 0,
+    justification = -.3, point_colour = NA
+  ) +
+  geom_boxplot(width = .12, outlier.shape = NA) +
+  geom_jitter(
+    width = 0.08, height = .2, alpha = 0.3, size = .5
+  ) +
+  theme_few()
+```
+
+
+If you prefer to have jitter points udner the boxplot:
+
+
+```{r}
+gapminder_2024<- gapminder_2024 %>%
+  mutate(
+    continent_f = fct_inorder(as.factor(continent)),
+    x_num = as.numeric(continent_f) - 0.25  # safe numeric shift
+  )
+
+ggplot(gapminder_2024, aes(continent_f, lex)) + 
+  ggdist::???(
+    adjust = .5, width = .3, .width = 0,
+    justification = -.3, point_colour = NA
+  ) +
+  ???(width = .12) +
+  ???(
+    aes(x = x_num),           # use the shifted numeric x
+    position = position_jitter(width = 0.08, height = .2),
+    alpha = 0.3, size = .5
+  ) +
+  labs(x = "Continent", y = "Life Expectancy") +
+  theme_few()
+
+```
+
+
+# Section 3: No code 
+
+In this final section, you will write your own code to complete each task. Use **tidyverse** and **ggplot2**.
+
+
+1. How does the relationship between life expectancy and GDP per capita vary across continents?
+
+Use the faceted scatter plots below to explore:
+
+- Do continents with higher incomes also show higher life expectancy?
+
+- Within each continent, how tightly are the points clustered — does this suggest a strong or weak relationship?
+
+- What does the amount of spread tell you about uncertainty and variability in this relationship?
+
+
+2. For 2024, model life expectancy as a function of log GDP per capita. Visualise the fitted line with a 95% confidence band and interpret whether the association is clearly positive across the observed range.
+
+3. Make two Empirical Cumulative Density Functions (ECDF) plots of gdpPercap (GDP per person) for the year 2024 — one where each country counts equally and one where countries are weighted by their population. Use `stat_ecdf()` to create CDF.
+
+Compare the two plots:
+
+- How does the shape of the line change when you weight by population?
+
+- What does that tell you about the difference between a random country and a random person in terms of income?
+
+:::{.callout-tip}
+## Example
+
+If the line crosses x = $10,000, we can trace upward to find the corresponding y-axis value.
+Let’s say y = 0.6 at that point — this means:
+
+60% of the countries (in the unweighted version) — or 60% of the world’s people (in the population-weighted version) — live in countries where GDP per capita is below $10,000.
+:::
+
+
+
+:::{.callout-tip}
+Hint to discuss: The weighted ECDF shifts toward the income distributions of populous countries; the unweighted ECDF reflects country-to-country spread.
+:::
+
+

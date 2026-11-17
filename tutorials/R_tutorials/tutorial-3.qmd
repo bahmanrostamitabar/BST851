@@ -1,0 +1,319 @@
+---
+title: "Tutorial 3- Data Visualisation in R"
+author: 
+  - name: "Bahman Rostami-Tabar"
+    affiliation: "Professor, Director, Data Lab for Social Godo Reserach Group, Cardiff Business School"
+    affiliation-url: "https://profiles.cardiff.ac.uk/staff/rostami-tabarb"
+  - name: "Amir (Hossein) Ghadiri"
+    affiliation: "PhD student, Cardiff Business School"
+    affiliation-url: "https://amirhosseinghdv.github.io/"  
+  - name: "Mustafa Aslan"
+    affiliation: "PhD student, Cardiff Business School"
+    affiliation-url: "https://profiles.cardiff.ac.uk/research-staff/aslanm"
+date: 22 October 2026
+format:
+  pdf: 
+    toc: true          # include a table of contents
+    number-sections: true
+  html:
+    code-fold: true    # allow folding of code blocks
+    toc: true
+    toc-depth: 2
+execute:
+  echo: true           # whether to show code
+  eval: false           # whether to run code
+  warning: false       # suppress warnings
+  message: false       # suppress messages
+---
+
+
+```{r}
+#| label: setup
+#| include: false
+# Load packages
+library(tidyverse)
+library(ggthemes)
+library(janitor)
+library(fpp3)
+library(dygraphs)
+library(tsbox)
+library(here)
+
+# Read data — ensure 'walmart.csv' is in the data directory
+walmart <- readr::read_csv(here("data/walmart.csv")) |> 
+  janitor::clean_names() |> 
+  mutate(
+    date = dmy(date),
+    store = as_factor(store),
+    holiday_flag = factor(holiday_flag, levels = c(0,1), labels = c("No","Yes"))
+  )
+
+```
+
+
+:::{.callout-warning}
+You need to first check if you have the required packages installed. If not, please install them using `install.packages("package_name")` command.
+
+Also, please ensure that the `walmart.csv` file is placed in the `data` folder of your project directory before running this tutorial.
+:::
+
+# Overview
+
+This tutorial introduces **data visualisation in R** using **tidyverse** and **ggplot2**, grounded in a real-world retail analytics context. Through the **Walmart weekly sales dataset**, we will practice turning raw data into insights by building time series, comparison, and relationship plots.
+
+We will work through three tiers of practice:
+
+- **Section 1 — Run-only:** complete code you can run to reproduce plots and analyses.  
+- **Section 2 — Fill-in-the-blanks:** partially complete code with `???` for you to replace.  
+- **Section 3 — No code (prompts):** questions only, so you write the code from scratch.
+
+
+## What questions can we answer with this data?
+
+Before plotting, it helps to articulate the decisions and hypotheses the visuals should serve. With weekly store-level sales and macro context, we can address questions such as:
+
+- **Holiday lift:** Do weekly sales increase in holiday weeks? By how much, and does it vary by store? 
+- **Store performance:** Which stores lead on **total** sales and on **average** sales?  
+- **Temporal structure:** Are there **seasonal** or **trend** patterns in total weekly sales?  
+- **External drivers:** How do **temperature**, **fuel prices**, **unemployment**, and **CPI** relate to weekly sales, and are any relationships conditional on holidays?  
+
+
+These questions guide the plots you’ll build and the design choices you’ll make (faceting, ordering, encodings, and annotations).
+
+## Learning objectives
+
+By the end of this tutorial, you will be able to:
+
+1. Create common graphics (e.g., scatter, bar, line, time series, boxplot) with **ggplot2**.  
+2. Use **aesthetics** (color, size, shape) to encode variables effectively.
+3. Apply **faceting**, **ordering**, and **themes** to communicate clearly.  
+4. Choose appropriate visualisations for different data types and questions.
+5. Interpret visualisations and justify design choices.
+
+# Dataset
+
+The Walmart dataset contains weekly sales at the store level along with contextual information. Each observation corresponds to a **store–week** pair, enabling both cross-sectional comparison and time-series exploration.
+
+**Columns:**
+
+- `Store` — store identifier (integer)  
+- `Date` — week ending date (string like `05/02/2010`)  
+- `Weekly_Sales` — weekly sales amount (numeric, dollars)  
+- `Holiday_Flag` — 1 if the week includes public holiday, else 0  
+- `Temperature` — average temperature for the week (Fahrenheit)  
+- `Fuel_Price` — average fuel price in the region (dollars/gallon)
+- `consumer price index` — CPI value in the rgion, a measure of inflation
+- `Unemployment` — unemployment rate
+
+::: callout-tip
+`Date` in `wallmaer.csv` appears in **day/month/year** format in the csv file. We'll parse it using **lubridate**, which is a package in **tidyverse** to work with date and time data.
+:::
+
+## Why this dataset (case study)
+
+From a retail-operations perspective, understanding **when** and **why** sales move helps with staffing, inventory positioning, and local promotions. Holiday effects can guide seasonal ordering; macro indicators like **fuel prices** and **unemployment** capture consumer spending constraints; **temperature** can proxy for weather-sensitive demand. Visualising these relationships provides fast, decision-ready signals: e.g., identifying stores with strong holiday lifts, spotting changing baselines across years, or detecting nonlinearities (like diminishing returns) that inform pricing and assortment strategies. The same workflow generalises to other networks—supermarkets, pharmacies, or convenience chains—where weekly cadence and local context matter.
+
+
+# Run the code 
+
+Please run the code below and observe the output, try to undestad the code, and link it to elements of the visualisation! Before that, let's have a quick look at the data
+
+```{r}
+# Missingness overview
+walmart |>
+  skimr::skim()
+```
+
+Now, let's create some plots, we start woth a simple bar plot that shows total sales for stores with holiday vs non-holiday weeks
+
+```{r}
+ggplot(data = walmart, 
+      mapping = aes(y = holiday_flag)) +
+geom_bar() +
+labs(title = "Holiday vs Non-holiday Weeks", 
+          x = "Count", y = "Holiday Flag") +
+theme_minimal()
+```
+
+We then create a horizontal bar chart ordered by mean weekly sales, this highlgihts which store has the highest average sales
+
+```{r}
+mean_by_store <- walmart |>
+  group_by(store) |>
+  summarise(mean_sales = mean(weekly_sales), .groups = "drop")
+
+ggplot(data = mean_by_store, 
+mapping = aes(x = fct_reorder(store, mean_sales),y = mean_sales)) +
+  geom_col() +
+  coord_flip() +
+  labs(title = "Mean Weekly Sales by Store",
+       x = "Store", y = "Mean Weekly Sales (USD)") +
+  scale_y_continuous(labels = scales::label_dollar()) +
+  ggthemes::theme_few()
+```
+
+Next, we explore what are the top six total sales stores,  and visulaise it with a bar plot to see the difference between holiday vs non-holiday weeks using stacked barplot
+
+```{r}
+# Top 6 stores by total sales — small multiples
+top_stores <- walmart |>
+  group_by(store) |>
+  summarise(total = sum(weekly_sales), .groups = "drop") |>
+  slice_max(total, n = 6) |> pull(store)
+
+walmart |> filter(store %in% top_stores) |> 
+  group_by(store, holiday_flag) |> 
+  summarise(total_sales = sum(weekly_sales), .groups = "drop") -> walmart_top6
+
+p <- ggplot(data = walmart_top6, 
+mapping = aes(x = store, y = total_sales, fill = holiday_flag))
+p + geom_col() + theme_minimal() +
+  labs(title = "Total Sales by Holiday vs Non-holiday Weeks for Top 6 Stores",
+       x = "Store", y = "Total Sales (USD)", fill = "Holiday Flag") +
+  scale_y_continuous(labels = scales::label_dollar())
+```
+
+Next we use position dodge to separate the bars for holiday vs non-holiday weeks, this ia preferred to a stacked bar plot as it allows for easier comparison between the two groups
+
+```{r}
+p <- ggplot(data = walmart_top6,
+mapping = aes(x = store, y = total_sales, fill = holiday_flag))
+p + geom_col(position = "dodge") +
+  theme_minimal() +
+  labs(title = "Total Sales by Holiday vs Non-holiday Weeks for Top 6 Stores",
+       x = "Store", y = "Total Sales (USD)", fill = "Holiday Flag") +
+  scale_y_continuous(labels = scales::label_dollar())
+```
+
+# Fill in the blanks
+
+We now want to explore the data further, but this time you will need to fill in the blanks (???) yourself. 
+Replace `???` with the correct dataset names, columns, geoms, or arguments, then run the code to verify your solution.
+
+We start by looking at overall weekly sales across time. This helps us identify any trends or seasonal patterns.
+
+```{r}
+# Overall weekly sales across time
+w_overall <- walmart |>
+  group_by(date) |>
+  summarise(weekly_sales = sum(weekly_sales), .groups = "drop")
+
+ggplot(data  = ???, mapping = aes(x = ?, y = weekly_sales)) +
+  geom_line(linewidth = 0.6) +
+  geom_smooth() +
+  labs(title = "Walmart: Total Weekly Sales Over Time",
+       x = "Week", y = "Total Weekly Sales (USD)") +
+  scale_y_continuous(labels = scales::label_dollar()) +
+  theme_minimal()
+```
+
+Next, we look at the top six stores by total sales and see how their weekly sales trend over time. 
+We use `facet_wrap` to create small multiples for each store.
+
+```{r}
+# Top 6 stores by total sales — small multiples
+walmart |> filter(store %in% top_stores) -> walmart_ales_top6
+ggplot(data = walmart_ales_top6, mapping = ???(date, weekly_sales)) +
+  ???(alpha = 0.6) +
+  facet_wrap(~ store, ncol = 3, scales = "free_y") +
+  labs(title = "Top 6 Stores by Total Sales — Weekly Trends",
+       x = "Week", y = "Weekly Sales (USD)") +
+  scale_y_continuous(labels = scales::label_dollar()) +
+  theme_minimal()
+```
+
+We can also create interactive plots to explore the data further. For example, we can use `dygraphs` to create an interactive time series plot. 
+Remember to install the `dygraphs` and `tsbox` packages if you haven’t already. 
+We must convert the data to a time series object using `tsbox`, because `dygraphs` works with `ts`-compatible objects.
+
+```{r}
+library(dygraphs)
+library(tsbox)
+walmart |> filter(store %in% top_stores) |> 
+  select(store, date, weekly_sales) -> walmart_top6_ts
+
+tsbox::???(walmart_top6_ts) |> 
+  dygraphs::???() |> 
+  dygraphs::dyRangeSelector(dateWindow = c("2010-02-12", "2010-03-19"))
+```
+
+We can also use `tsibble` and `ggtime` to create `autoplot`, seasonal plots, and subseries plots to further explore the data over time.
+
+```{r}
+walmart_top6_ts |> as_tsibble(index = date, key = store) -> walmart_tsb
+walmart_tsb |> ???(weekly_sales) # create a time plot
+```
+
+```{r}
+#| label: day-seasonal-plot-hourly
+walmart_tsb |> ggtime::???(weekly_sales) # seasonal plot
+```
+
+Let’s now explore the relationship between **temperature** and **weekly sales**. 
+We’ll use a scatter plot with a linear regression line to check for correlation.
+
+```{r}
+ggplot(data = walmart, mapping  = aes(x = ???, y = ???)) +
+  ???(alpha = 0.35) +
+  geom_smooth(method = "lm", color = "blue", se = TRUE) +
+  labs(title = "Temperature vs Weekly Sales",
+       x = "Temperature (°F)", y = "Weekly Sales (USD)") +
+  scale_y_continuous(labels = scales::label_dollar()) +
+  theme_minimal()
+```
+
+Next, we look at **fuel price vs weekly sales**, this time mapping colour to **unemployment rate** to examine interactions among three variables.
+
+```{r}
+ggplot(data = walmart, mapping = aes(x = ???, y = ???, color = ???), size = .5) +
+  geom_point(alpha = 0.5) +
+  labs(title = "Fuel Price vs Weekly Sales, by Unemployment",
+       x = "Fuel Price", y = "Weekly Sales (USD)", color = "Unemployment") +
+  scale_y_continuous(labels = scales::label_dollar()) +
+  scale_color_viridis_c() +
+  theme_minimal()
+```
+
+We can also visualise **consumer price index vs weekly sales**, again mapping colour to unemployment rate.
+
+```{r}
+ggplot(data = walmart, mapping = aes(??? = consumer_price_index, ??? = weekly_sales)) +
+  geom_point(alpha = 0.5) +
+  labs(title = "CPI vs Weekly Sales",
+       x = "Consumer Price Index", y = "Weekly Sales (USD)") +
+  scale_y_continuous(labels = scales::label_dollar()) +
+  scale_color_viridis_c() +
+  theme_minimal()
+```
+
+Finally, let’s examine how holiday weeks impact sales using a boxplot.
+
+```{r}
+ggplot(data = walmart, mapping = aes(y = holiday_flag, x = weekly_sales)) +
+  ???() +
+  labs(title = "??? by ???", x = "???", y = "???") +
+  theme_minimal()
+```
+
+# No code 
+
+In this final section, you will write your own code to complete each task. Use **tidyverse** and **ggplot2**.
+
+1. **Holiday impact**  
+   Compute mean and median `weekly_sales` for holiday vs non-holiday weeks.  
+   Plot a **boxplot** overlay comparing the two groups.
+
+2. **Store leaderboard**  
+   Calculate **total** `weekly_sales` by `store`.  
+   Produce a horizontal bar chart ordered by total sales, with labels.  
+   Discuss whether the ranking changes if you use mean instead of total.
+
+3. **Multivariate faceting**  
+   Plot `fuel_price` vs `weekly_sales`; map **color** to CPI and **size** to Unemployment.  
+   Use `facet_grid(holiday_flag ~ .)` to compare holiday vs non-holiday.  
+   Provide one concrete insight per facet.
+
+::: callout-tip
+**Style tips**: You can explore different themes in `ggthemes`, use clear axis labels, and order categories meaningfully. 
+Limit the number of encodings per plot to avoid clutter.
+:::

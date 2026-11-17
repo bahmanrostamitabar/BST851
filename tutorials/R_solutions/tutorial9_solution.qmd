@@ -1,0 +1,464 @@
+---
+title: "Tutorial 8 - Forecasting"
+author: 
+  - name: "Bahman Rostami-Tabar"
+    affiliation: "Professor, Director, Data Lab for Social Godo Reserach Group, Cardiff Business School"
+    affiliation-url: "https://profiles.cardiff.ac.uk/staff/rostami-tabarb"
+  - name: "Udeshi (Merennage) Salgado"
+    affiliation: "PhD student, Cardiff Business School"
+    affiliation-url: "https://profiles.cardiff.ac.uk/research-staff/salgadomum"  
+  - name: "Mustafa Aslan"
+    affiliation: "PhD student, Cardiff Business School"
+    affiliation-url: "https://profiles.cardiff.ac.uk/research-staff/aslanm"  
+date: 23 October 2025
+format:
+  html:
+    code-fold: true    # allow folding of code blocks
+    toc: true
+    toc-depth: 2
+  pdf: 
+    toc: true          # include a table of contents
+    number-sections: true
+execute:
+  cache: true          # cache code chunks
+  echo: true           # whether to show code
+  eval: false           # whether to run code
+  warning: false       # suppress warnings
+  message: false       # suppress messages
+---
+
+# Overview
+
+The tourism.csv dataset contains quarterly estimates of domestic tourism activity across Australia. Each row corresponds to a specific tourism region, state, and trip purpose during a given quarter, along with an estimate of the number of trips taken. The data begin in 1998 and include several trip purposes such as Business, Holiday, and Visiting friends or relatives. The variable Trips measures the total number of trips recorded for that category in the given quarter. This dataset is commonly used for demonstrating forecasting methods involving hierarchical structures, seasonal patterns, and disaggregation by purpose and region.
+
+The file contains quarterly tourism data with five columns:
+
+- Quarter — quarterly date of the observation
+- Region — tourism region within Australia
+- State — Australian state or territory
+- Purpose — purpose of travel (e.g., Business, Holiday)
+- Trips — estimated number of trips during the quarter
+
+
+# Setup
+
+```{r}
+library(tidyverse)
+library(fpp3)
+library(here)
+theme_set(theme_minimal())
+
+tourism <- read_csv(here("data/tourism.csv"))
+```
+
+
+# Run the code
+
+## Convert ot tsibble
+
+We begin by reading the tourism dataset and converting the Quarter column into a proper quarterly date format using `yearquarter()`.
+
+The data is then turned into a tsibble, which is the standard time-series data structure used in the fpp3 ecosystem.
+
+The index is the time variable (Quarter) and each unique combination of Region, State, and Purpose becomes its own time series via the key.
+
+```{r}
+tourism_ts <- tourism |>
+mutate(Quarter = yearquarter(Quarter)) |>
+as_tsibble(index = Quarter, key = c(Region, State, Purpose))
+```
+
+## Calculate total toursime
+
+This step aggregates all tourism trips across every region, state, and purpose into a single national measure of quarterly tourism.
+
+We group the data by Quarter and compute the total number of trips, creating a univariate time series useful for modeling and forecasting overall tourism demand.
+
+```{r}
+total_tourism <- tourism_ts |>
+index_by(Quarter) |>
+summarise(TotalTrips = sum(Trips))
+
+```
+
+We visualize the total trips over time to inspect long-term trends and seasonal patterns.
+This helps verify data quality and provides intuition before fitting any model.
+
+```{r}
+total_tourism |> autoplot(TotalTrips)
+
+```
+
+
+## Specify and estimate multiple models
+
+The fable framework provides a unified workflow for fitting many kinds of time series models. Regardless of whether the model is simple (naïve), statistical (ARIMA), or decomposition-based (ETS), the fitting process follows the same pattern:
+
+- You begin with a tsibble containing a time index and (optionally) key variables.
+- You pass that tsibble to the `model()` function.
+- Inside `model()`, you specify one or more models you want to estimate.
+
+The result is a `mable`— a model table containing all fitted models.
+
+This structure makes it easy to compare multiple models, generate forecast distributions, and evaluate accuracy using a consistent interface.
+
+```{r}
+fit <- total_tourism |>
+  model(
+    snaive  = SNAIVE(TotalTrips),
+    naive   = NAIVE(TotalTrips),
+    average = MEAN(TotalTrips),
+    ets     = ETS(TotalTrips),
+    arima   = ARIMA(TotalTrips),
+    tslm    = TSLM(TotalTrips ~ trend() + season())
+  )
+
+```
+    
+
+Using the aggregated TotalTrips time series, we estimate several forecasting models at once.
+Each model reflects a different assumption about how tourism behaves over time:
+
+- `SNAIVE(TotalTrips)`: Assumes that each quarter repeats the value from the same quarter last year. A good benchmark for strongly seasonal data.
+
+- `NAIVE(TotalTrips)`: Forecasts the next value using the most recent observation. Useful for series that follow a random-walk-like pattern.
+
+- `MEAN(TotalTrips)`: Uses the historical average as the forecast for all future periods. A simple baseline for comparison.
+
+- `ETS(TotalTrips)`: Fits an exponential smoothing model, automatically selecting the best combination of error, trend, and seasonal components.
+
+- `ARIMA(TotalTrips)`: Fits an autoregressive integrated moving average model with automated order selection, capturing autocorrelation and differencing structure.
+
+- `TSLM(TotalTrips ~ trend() + season())`:Fits a regression model with a linear trend and quarterly seasonal dummy variables.
+
+## Generate forecasts for the next 6 period
+
+```{r}
+fcst <- fit |> forecast(h = 6)
+```
+
+Once the models are fitted, the next task is to project the series into the future.
+The `forecast()` function takes the estimated models and produces forecasts for the next `h` time periods — in this case, six future quarters of total tourism.
+
+Because fit contains several models, `forecast()` automatically produces a forecast distribution for each model separately. The resulting object is a `fable`, which includes:
+
+- the point forecast (.mean), representing the expected value of future tourism;
+- the forecast distribution (e.g., Gaussian, ARIMA-based, or bootstrap-based);
+- prediction intervals, which measure forecast uncertainty;
+- the forecast time index, extending the original series into the future.
+
+
+Each model produces forecasts according to the assumptions underlying its structure.
+
+By collecting forecasts for all models at once, we can later compare their behaviour, visualize their uncertainty, and compute accuracy metrics once actual data become available
+
+## Get fitted values from the model
+
+```{r}
+fitted_ets <- fit |> filter(.model == "ets") |> augment()
+```
+
+Every forecasting model not only produces forecasts for future periods but also gives fitted values for the historical data.
+Fitted values are the model’s best estimates of what the series should have been at each past observation, according to the patterns it has learned (trend, seasonality, autocorrelation, etc.).
+
+In this step, we:
+
+Select one model from the collection of fitted models using `filter(.model == "ets")`
+
+This isolates the exponential smoothing (ETS) model from the full model table.
+
+The `augment()` function adds fitted values and residuals to the original training data.
+The result is a tsibble where each row contains:
+
+- the original observation (TotalTrips),
+- the fitted value (.fitted),
+- the residual (.resid), and
+- the model name.
+
+These fitted values help us evaluate how well the ETS model captures the underlying structure of total tourism. They can be visualized to compare the model’s behavior with the observed data.
+
+## Plot the forecast distribution along with fitted values and actual data for multiple models
+
+```{r}
+ggplot(data = fcst, mapping = aes(x = Quarter, ydist = Beer))+ # Plot for multiple models
+  ggdist::stat_halfeye(alpha = .4)+# Plot the forecast distribution
+  geom_line(aes(y=.mean, colour ="Point Forecast"))+# Plot the point forecast line
+  geom_line(aes(y = .fitted, colour ="Fitted"), data = filter_index(fitted_ets, "2005 Q1" ~ .))+# Plot the fitted values line
+  geom_point(aes(y = .fitted, colour ="Fitted"), data = filter_index(fitted_ets, "2005 Q1" ~ .))+# Plot the fitted values points
+  geom_line(aes(y = Beer, colour ="Data"),data = filter_index(aus_beer, "2005 Q1" ~ .))+# Plot the actual data line
+  geom_point(aes(y = Beer, colour ="Data"),data = filter_index(aus_beer, "2005 Q1" ~ .))+# Plot the actual data points
+  scale_color_manual(name=NULL,
+                     breaks=c('Fitted', 'Data',"Point Forecast"),
+                     values=c('Fitted'='#E69F00', 'Data'='#0072B2',"Point Forecast"="#000000"))+# Customize colors
+```
+
+
+## Extract prediction interval
+
+The `hilo()` function extracts prediction intervals from each model’s forecast distribution.
+By default, it returns the 80% and 95% intervals. `unpack_hilo()` converts the interval objects into separate columns (.lower, .upper) for easy viewing or plotting.
+
+
+```{r}
+fcst |> hilo() |> unpack_hilo()
+```
+
+
+Here we specifically request the 95% prediction interval.
+This interval captures the range in which we expect future tourism values to fall with 95% probability, according to each model’s forecast distribution.
+
+```{r}
+fcst |> hilo() |> unpack_hilo("95%") 
+```
+
+Some applications require comparing wide and narrow intervals.
+A 50% interval shows the central part of the distribution, whereas a 95% interval captures a much larger portion of uncertainty.
+
+```{r}
+fcst |> hilo(c(50,95)) |> unpack_hilo(c("95%", "50%")) 
+```
+
+Here we compute quantiles directly from the full forecast distribution.
+
+- q10 is the 10th percentile (a lower bound).
+- q50 is the median forecast (a robust point forecast).
+- q90 is the 90th percentile (an upper bound).
+
+```{r}
+fcst |> mutate(q10 = quantile(Beer, 0.10),
+               q50 = quantile(Beer, 0.50),
+               q90 = quantile(Beer, 0.90))
+```
+
+Forecast distributions contain full probabilistic information, not just means and intervals.
+Here we extract the variance and standard deviation of the forecast distribution using the distributional package.
+
+
+```{r}
+fcst |> mutate(
+  var  = distributional::variance(Beer),
+  sd   = sqrt(var)
+)
+```
+
+
+# Fill in blanks
+
+## Time Series Cross-Validation
+
+Time series cross-validation evaluates model performance by training on progressively expanding windows while respecting the order of observations. This avoids leakage of future information and provides a realistic assessment of forecast accuracy.
+
+We first define the forecast horizon.
+
+In this step, we split the aggregated total tourism series into a training set and a test set, using a fixed proportion of the most recent data for evaluation.
+
+We first specify that 30% of the data should be held out for testing. To create the test set, we identify the most recent 30% of quarters and keep only those observations. This means:
+
+- We compute how many quarters correspond to 30% of the dataset.
+- Then we select that many quarters from the end of the series.
+- The test set contains only these most recent observations.
+
+Next, we create the training set using the remaining (older) 70% of the data. This means:
+
+- We take all observations from the beginning of the series up to the start of the test period.
+- These observations form the training data used to fit our forecasting models.
+
+Why we do this:
+
+The goal is to evaluate forecasting models on data not used for training, mimicking how forecasts perform on future unseen data. This train/test split preserves the time order, preventing leakage and ensuring a valid evaluation of forecasting accuracy.
+
+```{r}
+forecast_horizon <- 6
+percentage_test <- 0.3
+
+test <- total_tourism |>
+  filter_index(as.character(max(total_tourism$Quarter) -
+                             round(percentage_test*length(unique(total_tourism$Quarter)))+1) ~ .)
+
+train <- total_tourism |>
+  filter_index(. ~ as.character(max(total_tourism$Quarter) -
+                                round(percentage_test*length(unique(total_tourism$Quarter)))))
+```
+
+## Rolling-Origin Resamples
+
+This code creates a rolling-origin time series cross-validation (TSCV) object using the aggregated total_tourism data.
+
+```{r}
+
+
+tscv_total <- total_tourism |>
+  filter_index(. ~ as.character(max(total_tourism$Quarter)-forecast_horizon)) |>
+  stretch_tsibble(.init = length(unique(train$Quarter)), .step = 1)
+```
+
+`stretch_tsibble()` generates a set of rolling-origin resamples. This means:
+
+- The first resample uses the initial training window (.init number of quarters).
+- The next resample extends the window by 1 quarter.
+- The next extends by another quarter.
+- And so on…
+
+## Fit Models
+
+We fit multiple forecasting models to each rolling-origin resample in the `tscv_total` object.
+
+```{r}
+fit <- tscv_total |> model(
+  naive = NAIVE(TotalTrips),
+  snaive = SNAIVE(TotalTrips),
+  arima = ARIMA(TotalTrips),
+  ets = ETS(TotalTrips),
+  regression = TSLM(TotalTrips ~ trend() + season()),
+  stl = decomposition_model(
+    STL(TotalTrips ~ trend(window = 21), robust = TRUE),
+    NAIVE(season_adjust)
+  )
+) |>
+  mutate(comb = (arima + ets + stl)/3)
+```
+
+we can create a forecast combination model by taking the simple average of individual forecasting models, here we do simple average of three model as a forecast combination, which could be cinsidered as an ensemble model.
+
+- arima — an ARIMA model
+- ets — an exponential smoothing (ETS) model
+- Snaive 
+
+## Forecasting
+
+Genearte forecasts for the next `forecast_horizon` periods for each rolling-origin resample.
+
+```{r}
+fcst <- fit |> forecast(h = forecast_horizon)
+```
+
+## Accuracy Evaluation
+
+The `accuracy()` function compares:
+
+- the forecasts generated by each model, and
+- the actual observed values in total_tourism.
+
+This is how we evaluate how well each model performed. The function aligns forecasts with the corresponding actual observations and computes accuracy measures for every model.
+
+We calculate three families of accuracy metrics:
+
+1. Point accuracy measures: These assess how close the forecast mean is to the actual values using measure such as ME (Mean Error), RMSE (Root Mean Squared Error), MAE (Mean Absolute Error), etc
+
+2. Interval accuracy measures: These assess the quality of prediction intervals, such as: winkler score (interval score)
+
+3. Distribution accuracy measures: These evaluate the entire forecast distribution, not just points or intervals: CRPS (Continuous Ranked Probability Score), and pinball score (quantile loss)
+
+By including all three groups, we evaluate not just point forecasts but the uncertainty estimates as well.
+
+```{r}
+fcst_accuracy <- fcst |> accuracy(
+  total_tourism,
+  measures = list(point_accuracy_measures,
+                  interval_accuracy_measures,
+                  distribution_accuracy_measures)
+)
+
+fcst_accuracy |> select(.model, ME, RMSE, MAE, winkler, pinball, CRPS)
+```
+
+
+if you want to calculate winkler score only for an specific level you can use the following code:
+
+```{r}
+fcst |> accuracy(total_tourism, list(winkler = winkler_score), level=.95)
+```
+
+if you want to calculate quantile score only for an specific probability you can use the following code:
+
+```{r}
+fcst |> accuracy(total_tourism, list(qs = quantile_score), probs=.95)
+```
+
+# No Code
+
+
+1. Using the time series cross-validation result, instad of reporting resuls as total average, report the accuracy measures for each rolling-origin resample and each model. Visualise how the selected accuracy measure (e.g., RMSE) varies. This will help understand the stability of model performance over time.
+
+```{r}
+#.id is the identifier for each rolling origin created in tscv
+# calculate accuracy by .id and .model
+accuracy_by_id <- fcst |> accuracy(total_tourism, 
+                                   measures = list(point_accuracy_measures,
+                                                   interval_accuracy_measures,
+                                                   distribution_accuracy_measures),
+                                   by = c(".model", ".id"))
+# visualize the variation of RMSE across different .id for each model
+ggplot(data = accuracy_by_id, mapping = aes( x = RMSE, y = fct_reorder(.model, RMSE)))+
+  geom_boxplot()+
+  ggthemes::theme_few()
+```
+
+2. Using the time series cross-validation result, report the resuls for the forecast horizon.s separately. Visualise how the selected accuracy measure (e.g., RMSE) varies by forecast horizon for each model. This will help understand how model performance changes as the forecast horizon increases.
+
+```{r}
+fc_h <- fcst |>
+  group_by(.id,.model) |>
+  mutate(h=row_number()) |> ungroup() |>
+  as_fable(response = "TotalTrips", distribution = "TotalTrips")
+# calculate accuracy by h and .model
+fc_accuracy_h <- fc_h |>
+  accuracy(total_tourism,
+           measures = list(point_accuracy_measures,
+                           interval_accuracy_measures,
+                           distribution_accuracy_measures),
+           by = c(".model","h"))
+
+
+
+#You can now create a line chart to show how forecast accuracy may change over the forecast horizon.
+
+ggplot(data = fc_accuracy_h,
+       mapping = aes(x = h, y = RMSE, color = .model))+
+  geom_point()+
+  geom_line()+
+  ggthemes::scale_color_colorblind()+
+  ggthemes::theme_clean()
+```
+
+3. For the forecasting method with the mimimum seelcted measure (e.g., RMSE) from time series cross validation, visualise the forecasting distribution along with the fitted values and actual data. To do this, first leave out 6 periods from the end of the data as a test set. Then, fit the selected model to the training set and generate forecasts for the test set period. Finally, plot the forecast distribution, fitted values, and actual data for comparison.
+
+```{r}
+train <- total_tourism |> filter_index(. ~ "2016 Q2") 
+test <- total_tourism |> filter_index("2016 Q3" ~ .) 
+
+fit_best <- train |> model(ets = ETS(TotalTrips)) 
+
+fcst_best <- fit_best |> forecast(h=6) -> fcst
+
+fitted_best <- fit_best |> augment()
+
+ggplot(data = fcst_best, mapping = aes(x = Quarter, ydist = TotalTrips))+ # Plot for multiple models
+  ggdist::stat_halfeye(alpha = .4)+# Plot the forecast distribution
+  geom_line(aes(y=.mean, colour ="Point Forecast"))+# Plot the point forecast line
+  geom_line(aes(y = .fitted, colour ="Fitted"), data = filter_index(fitted_best, "2010 Q1" ~ .))+# Plot the fitted values line
+  geom_point(aes(y = .fitted, colour ="Fitted"), data = filter_index(fitted_best, "2010 Q1" ~ .))+# Plot the fitted values points
+  geom_line(aes(y = TotalTrips, colour ="Data"),data = filter_index(total_tourism, "2010 Q1" ~ .))+# Plot the actual data line
+  geom_point(aes(y = TotalTrips, colour ="Data"),data = filter_index(total_tourism, "2010 Q1" ~ .))+# Plot the actual data points
+  scale_color_manual(name=NULL,
+                     breaks=c('Fitted', 'Data',"Point Forecast"),
+                     values=c('Fitted'='#E69F00', 'Data'='#0072B2',"Point")
+                    )
+```
+
+
+4. Now, let's generate 1000 bootstrap samples of the original time series data and fit the selected forecasting model (e.g., ETS) to each bootstrap sample. Then, generate forecasts for each bootstrap sample and visualise the forecast distribution along with the fitted values and actual data.
+
+```{r}
+fit_sim <- train |> model(NAIVE(TotalTrips))
+sim <- fit_sim |> fabletools::generate(h = 6, times = 100, bootstrap = TRUE)
+
+total_tourism |> filter_index("2010 Q1" ~ .) |>
+  ggplot(aes(x = Quarter)) +
+  geom_line(aes(y = TotalTrips)) +
+  geom_line(aes(y = .sim, colour = as.factor(.rep)), 
+    data = sim) +
+  labs(title="Total trips in Australia", y="Trip" ) +
+  guides(colour = "none")
+
+```

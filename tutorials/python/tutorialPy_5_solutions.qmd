@@ -1,0 +1,301 @@
+---
+title: "Tutorial 5: Data Wrangling Tutorial — Walmart Weekly Sales"
+author: 
+  - name: "Bahman Rostami-Tabar"
+    affiliation: "Professor, Director, Data Lab for Social Godo Reserach Group, Cardiff Business School"
+    affiliation-url: "https://profiles.cardiff.ac.uk/staff/rostami-tabarb"
+  - name: "Udeshi (Merennage) Salgado"
+    affiliation: "PhD student, Cardiff Business School"
+    affiliation-url: "https://profiles.cardiff.ac.uk/research-staff/salgadomum"  
+  - name: "Mustafa Aslan"
+    affiliation: "PhD student, Cardiff Business School"
+    affiliation-url: "https://profiles.cardiff.ac.uk/research-staff/aslanm"  
+date: 23 October 2025
+format:
+  html:
+    code-fold: true    # allow folding of code blocks
+    toc: true
+    toc-depth: 2
+  pdf: 
+    toc: true          # include a table of contents
+    number-sections: true
+execute:
+  cache: true          # cache code chunks
+  echo: true           # whether to show code
+  eval: false           # whether to run code
+  warning: false       # suppress warnings
+  message: false       # suppress messages
+---
+
+```{python}
+import pandas as pd
+import janitor
+walmart_raw = pd.read_csv("data/walmart.csv").clean_names()
+```
+
+# Overview
+
+In this hands-on tutorial, you'll practice core **pandas** data-wrangling skills on a real retail dataset: **Walmart weekly sales**.
+
+We will work through three tiers of practice:
+
+-   **Section 1 — Run-only:** complete code you can run to reproduce plots and analyses.
+
+-   **Section 2 — Fill-in-the-blanks:** partially complete code with `???` for you to replace.
+
+-   **Section 3 — No code (prompts):** questions only, so you write the code from scratch.
+
+## Learning objectives
+
+By the end of this tutorial, you will be able to:
+
+-   filter/select/arrange rows and columns
+-   count and summarise with `groupby()` + `agg()`
+-   create new variables with `assign()`
+-   reshape with `pivot_table()`
+-   join multiple datasets using `merge` funtions
+
+We'll use `read_csv` to load **walmart.csv** and a short cleaning step to standardise names and parse dates.
+
+# Dataset
+
+The Walmart dataset contains weekly sales at the store level along with contextual features. Each observation corresponds to a **store–week** pair, enabling both cross-sectional comparison and time-series exploration.
+
+**Columns:**
+
+-   `store` — store identifier (integer)
+-   `date` — week ending date (string like `05/02/2010`)
+-   `weekly_sales` — weekly sales amount (numeric, dollars)
+-   `holiday_flag` — 1 if the week includes public holiday, else 0
+-   `temperature` — average temperature for the week (Fahrenheit)
+-   `fuel_price` — average fuel price in the region (dollars/gallon)
+-   `consumer_price_index` — CPI value in the rgion, a measure of inflation
+-   `unemployment` — unemployment rate
+
+
+# Section 1-Run the code
+
+```{python load-data}
+walmart_raw.dtypes
+```
+
+check the data structure, and make sure it's tibble, then check data types!
+
+::: callout-warning
+Look at the data type next to column date, it says `object`, which is not a correct data type! we have to change it, maybe to a date, let's start with that!
+:::
+
+```{python}
+walmart_correct_date = walmart_raw.assign(date=pd.to_datetime(walmart_raw['date'], format='%d/%m/%Y'))
+```
+
+`date` in `walmart.csv` appears in **day/month/year** format in the csv file. We'll parse it using **to_datetime**, which is a function in **pandas** to work with date and time data. We use the argument `format` to match the format in the csv file! Look at other arguments of to_datetime, type help(pd.to_datetime) in the console and press Enter!
+
+The date in column `date`, are 7 days apart, so basically this column represents weeks of the year, let's convert it to that, we can do it using tsibble package:
+
+```{python}
+walmart_correct_week = walmart_correct_date.assign(
+    week=walmart_correct_date['date'].dt.isocalendar().week
+)
+```
+
+holiday_flag variable valeus are also 0, or 1, to make it more meaningful we change them to "Holiday", "Non-holiday". To do that, we have to use `where()` function from `numpy` package! This fucntion is useful for one condition:
+
+
+```{python}
+import numpy as np
+walmart = walmart_correct_week.assign(
+    holiday_flag=np.where(walmart_correct_week["holiday_flag"] == 1, "Holiday", "Non-holiday")
+)
+```
+
+What if I have multiple condition, for example which fcuntion I can use if I create a new variable which take `temperature` variable and categrise it into cold, hot, and mild?
+
+```{python}
+walmart_temperature_category = walmart.assign(
+    temperature_category=np.select(
+        [walmart["temperature"] >= 90,
+        (walmart["temperature"] >=60) & (walmart["temperature"] < 90)],
+        ["hot","mild"],
+        default="cold"
+    )
+)
+display(walmart_temperature_category)
+```
+
+Instead of comparison operators, like  ` >=` `&`` <`, you could use `between()`, like between(60, 89). For example: `walmart["temperature"].between(60, 89)`.
+
+Now, let's pick the weeks that are **holiday weeks**:
+
+```{python}
+walmart[walmart["holiday_flag"] == "Holiday"]
+```
+
+From the walmart data, Keep only `store`, `date`, `weekly_sales`, and `temperature`, and save it in a new name , walmart_selected`
+
+```{python}
+walmart_selected = walmart[["store", "date", "weekly_sales", "temperature"]]
+```
+
+Remove the columns `date` and `unemployment`.
+
+```{python}
+walmart.drop(columns=["date", "unemployment"])
+```
+
+# Section 2: filling blank
+
+Sometimes , you might be interested in selecting some rows, here you can use `iloc`, for example, select rows from 5 to 10:
+
+```{python}
+walmart.iloc[5:11]
+```
+
+you may also try, `head()`, `tail()`, `sample(n=5)` or `sample(n=10)`.
+
+Let's not calculate total weely sales per year and store, and them select the 5 highest and lowest sales:
+
+:::{.callout-tip}
+Use `nsmallest()` and `nlargest()` select rows with highest or lowest values of a variable.
+:::
+
+```{python}
+walmart_raw.assign(
+    date=pd.to_datetime(walmart_raw['date'], format='%d/%m/%Y'),
+    year=lambda df: df['date'].dt.year
+).groupby(['store', 'year'], as_index=False).agg(
+    total_sales=('weekly_sales', 'sum')
+).nlargest(5, 'total_sales')
+
+```
+
+Now, let's reorder the columns, I want to see store , date, week, weekly_sales, and then everyhting as they are:
+
+```{python}
+cols_first = ['store', 'date', 'week', 'weekly_sales']
+cols = cols_first + [c for c in walmart.columns if c not in cols_first]
+walmart[cols]
+```
+
+Create new column to extract , year, quarter, and month in seperate columns!
+```{python}
+walmart = walmart.assign(
+    year=pd.to_datetime(walmart['date'], format='%d/%m/%Y').dt.year,
+    quarter=pd.to_datetime(walmart['date'], format='%d/%m/%Y').dt.quarter,
+    month=pd.to_datetime(walmart['date'], format='%d/%m/%Y').dt.month
+)
+```
+
+you could also add columns to extract time related information using `dt` accessor from pandas:
+
+
+```{python}
+walmart_dates = walmart.copy()
+walmart_dates['week'] = walmart_dates['date'].dt.isocalendar().week
+walmart_dates['quarter'] = walmart_dates['date'].dt.quarter
+walmart_dates['month'] = walmart_dates['date'].dt.month
+walmart_dates['year'] = walmart_dates['date'].dt.year
+```
+
+Sort by **weekly_sales** (smallest → largest).
+
+```{python}
+walmart_dates.sort_values(by='weekly_sales')
+```
+
+Now sort by **weekly_sales** in **descending** order, breaking ties by **store** (ascending).
+
+
+```{python}
+walmart_dates.sort_values(by=['weekly_sales', 'store'], ascending=[False, True])
+```
+
+Counts by **year** and **is_holiday**:
+
+```{python}
+walmart_dates[['year', 'holiday_flag']].value_counts().reset_index(name='n').sort_values(['year', 'holiday_flag'])
+```
+
+Sometime, you want to do somethign aross all columns, instead of doing this column by column, you can do that to all columns. Here we want to calculate the average of all numercial columns by year!, so we say across all columns, whereever you have a numerical variable, calculate its average:
+
+
+```{python}
+walmart_raw.assign(
+    date=lambda df: pd.to_datetime(df['date'], dayfirst=True),
+    year=lambda df: df['date'].dt.year,
+    store=lambda df: df['store'].astype('category'),
+    holiday_flag=lambda df: df['holiday_flag'].astype('category'),
+).groupby('year', as_index=False).mean(numeric_only=True)   # mean of all numeric columns by year
+```
+
+Create **sales_in_millions** (`weekly_sales / 1e6`) and **temp_c** from Fahrenheit.\
+Recall: °C = (°F − 32) × 5/9.
+
+
+```{python}
+walmart.assign(
+    sales_in_millions=lambda df: df['weekly_sales'] / 1e6,
+    temp_c=lambda df: (df['temperature'] - 32) * 5/9
+)[['store', 'date', 'weekly_sales', 'sales_in_millions', 'temp_c']]
+```
+
+Add an indicator for **hot weeks**: temperature ≥ 90°F, and then count by store.
+
+
+```{python}
+walmart.assign(
+    heat_flag=lambda df: np.where(df['temperature'] >= 90, 'hot', 'not_hot')
+).groupby(['store', 'heat_flag'], as_index=False).size().rename(
+    columns={'size': 'n'}).sort_values(['store', 'heat_flag'])
+```
+
+Calculate, average, minimum, and maximum weekly sales **by store**
+
+```{python}
+walmart.groupby('store', as_index=False)['weekly_sales'].agg(
+    mean_sales='mean', min_sales='min', max_sales='max')
+```
+
+Filter away missing values before summarising (for example, weekly_sales and temperature).
+
+
+```{python}
+walmart_dates[walmart_dates['weekly_sales'].notna()
+                      & walmart_dates['temperature'].notna()].groupby(
+    'year', as_index=False).agg(
+        mean_sales = ('weekly_sales', 'mean'),                    # mean(weekly_sales)
+        mean_temp  = ('temperature', 'mean')                      # mean(temperature)
+    )
+```
+
+Can you use `dropna()` when you have missing values? what it does?
+
+# Section3: No code
+
+1.  For each **store**, find the **top 3** weekly sales weeks (date + amount).
+
+```{python}
+(
+    walmart.groupby('store', group_keys=False)
+    .apply(lambda df: df.nlargest(3, 'weekly_sales'))
+    .loc[:, ['store', 'date', 'weekly_sales']]
+)
+```
+
+2.  We want to calculate the total sales for all walmart stores based on the temperatures, whether it's cold, mild, hot!
+
+```{python}
+walmart.assign(
+    temp_category=lambda df: np.select(
+        [df['temperature'] >= 90,
+         (df['temperature'] >= 60) & (df['temperature'] < 90)],
+        ['hot', 'mild'],
+        default='cold'
+    )
+).groupby('temp_category', as_index=False).agg(
+    total_sales=('weekly_sales', 'sum')
+)
+```
+
+
+*Tip:* You may find `nlargest()`, `apply()`, `np.select`, `lambda`, `agg()`, and `groupby()` handy.

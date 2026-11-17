@@ -1,0 +1,286 @@
+---
+title: "Tutorial 5- Data Wrangling in R"
+author: 
+  - name: "Bahman Rostami-Tabar"
+    affiliation: "Professor, Director, Data Lab for Social Godo Reserach Group, Cardiff Business School"
+    affiliation-url: "https://profiles.cardiff.ac.uk/staff/rostami-tabarb"
+  - name: "Amir (Hossein) Ghadiri"
+    affiliation: "PhD student, Cardiff Business School"
+    affiliation-url: "https://amirhosseinghdv.github.io/"  
+  - name: "Mustafa Aslan"
+    affiliation: "PhD student, Cardiff Business School"
+    affiliation-url: "https://profiles.cardiff.ac.uk/research-staff/aslanm"
+date: 05 November 2026
+format:
+  pdf: 
+    toc: true          # include a table of contents
+    number-sections: true
+  html:
+    code-fold: true    # allow folding of code blocks
+    toc: true
+    toc-depth: 2
+execute:
+  echo: true           # whether to show code
+  eval: false           # whether to run code
+  warning: false       # suppress warnings
+  message: false       # suppress messages
+---
+
+```{r}
+library(tidyverse)
+library(lubridate)
+library(janitor)
+library(tsibble)
+library(here)
+walmart_raw <- readr::read_csv(here("data/walmart.csv")) |> janitor::clean_names()
+
+```
+
+# Overview
+
+In this hands-on tutorial, you'll practice core **tidyverse** data-wrangling skills on a real retail dataset: **Walmart weekly sales**.
+
+We will work through three tiers of practice:
+
+-   **Section 1 — Run-only:** complete code you can run to reproduce plots and analyses.
+
+-   **Section 2 — Fill-in-the-blanks:** partially complete code with `???` for you to replace.
+
+-   **Section 3 — No code (prompts):** questions only, so you write the code from scratch.
+
+## Learning objectives
+
+By the end of this tutorial, you will be able to:
+
+-   filter/select/arrange rows and columns
+-   count and summarise with `group_by()` + `summarize()`
+-   create new variables with `mutate()`
+-   reshape with `pivot_longer()` / `pivot_wider()`
+-   join multiple datasets using `join_` funtions
+
+We'll use `readr` to load **walmart.csv** and a short cleaning step to standardise names and parse dates.
+
+# Dataset
+
+The Walmart dataset contains weekly sales at the store level along with contextual features. Each observation corresponds to a **store–week** pair, enabling both cross-sectional comparison and time-series exploration.
+
+**Columns:**
+
+-   `store` — store identifier (integer)
+-   `date` — week ending date (string like `05/02/2010`)
+-   `weekly_sales` — weekly sales amount (numeric, dollars)
+-   `holiday_flag` — 1 if the week includes public holiday, else 0
+-   `temperature` — average temperature for the week (Fahrenheit)
+-   `fuel_price` — average fuel price in the region (dollars/gallon)
+-   `consumer_price_index` — CPI value in the rgion, a measure of inflation
+-   `unemployment` — unemployment rate
+
+
+# Section 1-Run the code
+
+```{r load-data}
+walmart_raw
+```
+
+check the data structure, and make sure it's tibble, then check data types!
+
+::: callout-warning
+Look at the data type unde column date, it says `chr`, whcih is not a correct data tyep! we have to change it, maybe to a date, let's start with that!
+:::
+
+```{r}
+walmart_correct_date <- walmart_raw |> mutate(date = lubridate::dmy(date))
+```
+
+`date` in `wallmaer.csv` appears in **day/month/year** format in the csv file. We'll parse it using **lubridate**, which is a package in **tidyverse** to work with date and time data. We use the function `dmy()` to match the format in the csv file! Look at other fuctions of lubridate, type vignette("lubridate") in the console and press Enter!
+
+The date in column `date`, are 7 days apart, so basically this column represents weeks of the year, let's convert it to that, we can do it using tsibble package:
+
+```{r}
+walmart_correct_week <- walmart_correct_date |> 
+  mutate(week = tsibble::yearweek(date))
+```
+
+holiday_flag variable valeus are also 0, or 1, to make it more meaningful we change them to "Holiday", "Non-holiday". To do that, we have to use `if_else()`! This fucntion is useful for one condition:
+
+```{r}
+walmart <- walmart_correct_week |> 
+  mutate(holiday_flag = if_else(holiday_flag == 1, "Holiday", "Non-holiday"))
+```
+
+What if I have multiple condition, for example which fcuntion I can use if I create a new variable whcih take `temperature` variable and categrise it into cold, hot, and mild?
+
+```{r}
+walmart_temperature_category <- walmart |> 
+mutate(temperature_category = 
+    case_when(
+        temperature >= 90 ~ "hot",
+        temperature >= 60 & temperature < 90 ~ "mild",
+        TRUE ~ "cold" # Default case if none of the above are met
+    )
+)
+
+View(walmart_temperature_category)
+```
+
+Instead of comparison operators, like  ` >=` `&`` <`, you could you `between()`, like between(temperature, 60, 89) ~ "mild"
+
+Now, let's pick the weeks that are **holiday weeks**:
+
+```{r}
+walmart |> 
+  filter(holiday_flag == "Holiday")
+```
+
+From the gapminder data, Keep only `store`, `date`, `weekly_sales`, and `temperature`, and save it ina new naem , walmart_selected`
+
+```{r}
+walmart |> select(store, date,weekly_sales,temperature) -> walmart_selected
+```
+
+Remove the columns `date` and `unemployment`.
+
+```{r}
+walmart |> 
+  select(-date, -unemployment)
+```
+
+
+# Sedtion 2: filling blank
+
+sometimes , you migh be inteertes in selecting some roews, heer you can use `slice()`
+
+```{r}
+walmart |> slice(5:10)  
+```
+
+you may also try, `slice_head()`, `slice_tail() ` or `slice_sample() `.
+
+Let's not calculate total weely sales per year and store, and them select the 5 highest and lowest sales:
+
+:::{.callout-tip}
+Use `slice_min()` and `slice_max()` select rows with highest or lowest values of a variable.
+:::
+
+```{r}
+walmart_raw |> 
+  mutate(date = ???(date), year = lubridate::???(date)) |> 
+  group_by(store, year) |> 
+  summarise(total_sales = ???(weekly_sales), .groups ="drop") |> 
+  ???(???, n=5)
+```
+
+what `n=5` represents in the code? also, why we recommend to use `.groups ="drop"` every time you use sumamrise and group_by?
+
+Now, let's reorder the columns, I want to see store , date, week, weekly_sales, and then everyhting as they are:
+
+```{r}
+walmart |> select(???, ???, ???, ???, ???)
+```
+
+Create new column to extract , year, quarter, and month in seperate columns!
+
+```{r}
+walmart |> mutate(year = lubridate::???(date),
+                  quarter = lubridate::???(date),
+                  month = lubridate::???(date, label = TRUE))
+```
+
+you could also use tsibble package to extract time related infomation,
+
+```{r}
+walmart_tsibble_dates <- walmart |> mutate(
+                week = tsibble::yearweek(date),
+                quarter = tsibble::yearquarter(date),
+                month = tsibble::yearmonth(date),
+                year = lubridate::year(date))
+```
+
+
+Sort by **weekly_sales** (smallest → largest).
+
+```{r}
+walmart_tsibble_dates |> ???(weekly_sales) 
+```
+
+Now sort by **weekly_sales** in **descending** order, breaking ties by **store** (ascending).
+
+```{r}
+walmart_tsibble_dates |> ???(???(weekly_sales), store)
+```
+
+Counts by **year** and **is_holiday**:
+
+```{r}
+walmart_tsibble_dates |> ???(year, holiday_flag)
+```
+
+
+sometine, you want to do somethign aross all columns, isnetad of doig this colun vy colun,d you can use `across()`, to apply that to all columnd. Here we want to calculate the average of all numercial columns by year! , so we say across all columns, whereever you ahve a numercial varianle, calculate its average:
+
+```{r}
+walmart_raw |> 
+  mutate(date = dmy(date), year = lubridate::year(date), 
+  store = as_factor(store), # make cgr as factor
+  holiday_flag = as_factor(holiday_flag)) |> 
+  group_by(year) |> 
+        summarise(across(where(is.numeric), mean)) # Calculate mean for all numeric columns by year
+
+```
+
+Create **sales_in_millions** (`weekly_sales / 1e6`) and **temp_c** from Fahrenheit.\
+Recall: °C = (°F − 32) × 5/9.
+
+```{r}
+walmart |> 
+  mutate(
+    sales_in_millions = ??? / 1e6,
+    temp_c = (??? - 32) * 5/9
+  ) |> 
+  select(store, date, weekly_sales, sales_in_millions, temp_c)
+```
+
+Add an indicator for **hot weeks**: temperature ≥ 90°F, and then count by store.
+
+```{r}
+walmart |> 
+  mutate(heat_flag = ???(temperature >= 90, "hot", "not_hot")
+        ) |> 
+  ???(store, heat_flag) |> 
+  arrange()
+```
+
+Calculate, average, minimum, and maximum weekly sales **by store**, what `na.rm = TRUE` means?
+
+```{r }
+walmart |> 
+  ???(store) |> 
+  ???(mean_sales = mean(weekly_sales, na.rm = TRUE),
+      min_sales = min(weekly_sales, na.rm = TRUE),
+      max_sales = max(weekly_sales, na.rm = TRUE))
+```
+
+
+Filter away missing values before summarising (for example, weekly_sales and temperature).
+
+```{r}
+walmart_tsibble_dates |> 
+  filter(!is.na(weekly_sales), !is.na(temperature)) |> 
+  group_by(year) |> 
+  summarize(
+    mean_sales = mean(weekly_sales),
+    mean_temp  = mean(temperature)
+  )
+```
+
+Can you use `drop_na` when you have missing values? what it does?
+
+# Section3: No code
+
+1.  For each **store**, find the **top 3** weekly sales weeks (date + amount).
+
+2.  We want to calculate the total sales for all walmart stores based on the temperatures, wetehr it;s cold, mild, hot!
+
+
+
+*Tip:* You may find `slice_max()`, `case_when`, `arrange()`, and `mutate()` handy.

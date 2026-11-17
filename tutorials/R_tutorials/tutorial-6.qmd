@@ -1,0 +1,516 @@
+---
+title: "Tutorial 7 - Machine Learning with Tidymodels: Linear Regression"
+author: 
+  - name: "Bahman Rostami-Tabar"
+    affiliation: "Professor, Director, Data Lab for Social Godo Reserach Group, Cardiff Business School"
+    affiliation-url: "https://profiles.cardiff.ac.uk/staff/rostami-tabarb"
+  - name: "Amir (Hossein) Ghadiri"
+    affiliation: "PhD student, Cardiff Business School"
+    affiliation-url: "https://amirhosseinghdv.github.io/"  
+  - name: "Mustafa Aslan"
+    affiliation: "PhD student, Cardiff Business School"
+    affiliation-url: "https://profiles.cardiff.ac.uk/research-staff/aslanm"
+date: 19 November 2026
+format:
+  html:
+    code-fold: true    # allow folding of code blocks
+    toc: true
+    toc-depth: 2
+  pdf: 
+    toc: true          # include a table of contents
+    number-sections: true
+execute:
+  cache: true          # cache code chunks
+  echo: true           # whether to show code
+  eval: false           # whether to run code
+  warning: false       # suppress warnings
+  message: false       # suppress messages
+---
+
+# Overview
+
+This tutorial is about Linear Regression using modern **tidymodels workflow**. Each section includes **explanations**, **visualisations**, and **three types of exercises**.
+
+We use two datasets from the *ISLR2* package:
+
+- **boston** (predicting median home value)
+- **Carseats** (predicting sales with qualitative predictors)
+
+
+
+# Setup
+
+```{r}
+library(tidyverse)
+library(tidymodels)
+library(here)
+theme_set(theme_minimal())
+
+advertising <- read_csv(here("data/advertising.csv"))
+carseats <- read_csv(here("data/carseats.csv"))
+boston <- read_csv(here("data/boston.csv"))
+```
+
+
+# Run the code
+
+## Advertising Data
+
+The Advertising dataset is a widely used benchmark for studying linear regression, marketing analytics, and predictive modelling.
+It contains information collected from 200 market regions, each reporting product sales alongside advertising expenditures in several media channels.
+
+The main outcome of interest is:
+
+- sales — product sales (in thousands of units)
+
+The dataset also includes three predictors representing advertising budgets in different media categories. These capture distinct channels firms use to reach consumers and often exhibit non-uniform effects on sales. The predictors are:
+
+- TV — advertising budget spent on TV (in thousands of dollars)
+
+- radio — advertising budget spent on radio
+
+- newspaper — advertising budget spent on newspaper advertising
+
+Our objective is to model and interpret the relationship between advertising expenditures and product sales, beginning with simple linear regression and then expanding to a multiple regression model.
+
+Through this analysis, we aim to:
+
+- Visualise how each advertising channel relates to sales
+
+- Fit simple linear regression models, beginning with TV spending as a single predictor
+
+- Extend the model to multiple linear regression include TV, radio and newspaper
+
+- Interpret coefficients and assess uncertainty in the estimated relationships
+
+- Evaluate predictive performance on a held-out test set using tidymodels
+
+### Train–test split
+
+Before fitting any model, it is important to evaluate how well it generalises to new, unseen data. To do this, we follow a standard machine-learning workflow and divide the dataset into two parts:
+
+- **training set** — used to estimate model parameters  
+- **test set** — used only for evaluating predictive performance  
+
+This separation helps us avoiding overfitting and gives a more realistic sense of how well the model will perform in practice.
+
+The code below randomly splits the data so that 80% of the observations are used for training and the remaining 20% are held out for testing.
+
+```{r}
+set.seed(502)
+adv_split <- initial_split(advertising, prop = 0.80, strata = sales)
+adv_train <- training(adv_split)
+adv_test  <- testing(adv_split)
+```
+
+### Creating a modelling recipe
+
+In tidymodels, a *recipe* is used to define the structure of a model before any fitting takes place.  
+
+It specifies:
+
+- which variable we want to predict, response or output, (**sales**)  
+- which predictors we will use (**TV**)  
+- any preprocessing steps we may later add (such as transformations or interactions)
+
+Creating a recipe makes the modelling pipeline more modular and reproducible.  
+At this stage, the recipe simply records that we intend to fit a model of sales as a function of TV advrtisign budget in the training data.
+
+
+```{r}
+adv_rec_tv <- recipe(sales ~ TV, data = adv_train)
+```
+
+
+The recipe stores the formula and handles preprocessing later.
+
+
+### Model specification
+
+After defining the modelling recipe, the next step is to specify the type of model we want to fit.  
+
+Here, we choose a **linear regression** model using the `linear_reg()` function from the **parsnip** package, which is part of the tidymodels ecosystem. We then set the computational engine to `"lm"` to use R’s built-in linear modelling functions.
+
+The resulting object, `mod_linear`, stores:
+
+- the fact that we are using **linear regression**,  
+- the choice of estimation engine (**`lm`**), and  
+- the default settings for how the model should be fitted.
+
+What it does *not* yet contain is the formula or the data—those components come from the recipe and are added later in the workflow. 
+
+This separation keeps the modelling pipeline modular and makes it easy to swap in different model types without changing the rest
+
+
+```{r}
+mod_linear_adv <- linear_reg() |> set_engine("lm")
+```
+
+### Workflow and model fitting
+
+Once we have defined both the recipe (which sets out the model formula and any preprocessing steps) and the model specification (which defines the type of model we want to use), the next step is to bring them together in a **workflow**.  
+
+A workflow is a central tidymodels object that keeps track of every step involved in a modelling process. This makes the analysis reproducible, modular, and easy to extend. A workflow bundles the components of a modelling pipeline into a single object, ensuring that:
+
+- the recipe is applied consistently during training and when making predictions,  
+- the correct model specification and engine are used, and  
+- the entire process is reproducible and easy to modify.
+
+In the code below, each function plays a specific role:
+
+- **`add_recipe(rec_simple)`** attaches the recipe we defined to the workflow.  
+  This tells tidymodels which variables will be used (the model formula) and how they should be preprocessed.
+
+- **`add_model(mod_linear)`** attaches the model specification we have defined.  
+  This identifies the type of model to fit (linear regression) and the engine to use (`"lm"`).
+
+- **`fit(wf_simple, data = train)`** executes the entire pipeline on the training data. 
+
+Tidymodels applies the recipe first, then fits the linear regression model using the processed data.
+
+Finally, `tidy(adv_fit_tv)` extracts the fitted coefficients in a clean, readable table.
+
+```{r}
+adv_wflow_tv <- workflow() %>% add_recipe(adv_rec_tv) |> add_model(mod_linear_adv)
+adv_fit_tv <- fit(adv_wflow_tv, adv_train)
+tidy(adv_fit_tv)  
+```
+
+### Prediction
+
+Once the model has been fitted to the training data, we assess how well it generalises to new observations by making predictions on the **test set**.  
+
+The `predict()` function applies the entire workflow—preprocessing from the recipe and the fitted linear regression model—to the test data.  
+
+This produces predicted values of `sales` for each observation in the test set.
+
+```{r}
+preds_sales <- predict(adv_fit_tv, adv_test)
+preds_sales
+```
+
+We then use `bind_cols()` to attach these predictions to the original test data, allowing us to compare predicted and actual values directly.  
+
+```{r}
+preds_actual_sales <- preds_sales |> bind_cols(test)
+preds_actual_sales |>
+  ggplot(aes(sales,.pred)) +
+  geom_point(alpha = 0.6) +
+  geom_abline(colour = "red") +
+  labs(title = "Predicted vs Actual")
+```
+
+## Multiple linear regression
+
+```{r}
+#-----------------------------------------------------------------------
+# Data split
+#-----------------------------------------------------------------------
+set.seed(502)
+adv_split <- initial_split(advertising, prop = 0.80, strata = sales)
+train <- training(adv_split)
+test  <- testing(adv_split)
+
+```
+
+```{r}
+
+#-----------------------------------------------------------------------
+# MODEL 2: sales ~ TV + radio
+#-----------------------------------------------------------------------
+rec_tvradio <- recipe(sales ~ TV + radio, data = train)
+
+lm_mod <- linear_reg() |> set_engine("lm")
+
+wf_tvradio <- workflow() |> 
+  add_model(lm_mod) |>
+  add_recipe(rec_tvradio)
+
+fit_tvradio <- fit(wf_tvradio, train)
+
+pred_tvradio <- predict(fit_tvradio, test) |> bind_cols(test)
+
+metrics_tvradio <- metric_set(rmse, rsq)(pred_tvradio, truth = sales, estimate = .pred)
+
+tidy_tvradio   <- tidy(extract_fit_engine(fit_tvradio))
+glance_tvradio <- glance(extract_fit_engine(fit_tvradio))
+
+metrics_tvradio
+tidy_tvradio
+glance_tvradio
+```
+
+
+```{r}
+#-----------------------------------------------------------------------
+# MODEL 3: sales ~ TV + radio + newspaper
+#-----------------------------------------------------------------------
+rec_full <- recipe(sales ~ TV + radio + newspaper, data = train)
+
+lm_mod <- linear_reg() |> set_engine("lm")
+
+wf_full <- workflow() |> 
+  add_model(lm_mod) |>
+  add_recipe(rec_full)
+
+fit_full <- fit(wf_full, train)
+
+pred_full <- predict(fit_full, test) |> bind_cols(test)
+
+metrics_full <- metric_set(rmse, rsq)(pred_full, truth = sales, estimate = .pred)
+
+tidy_full   <- tidy(extract_fit_engine(fit_full))
+glance_full <- glance(extract_fit_engine(fit_full))
+
+metrics_full
+tidy_full
+glance_full
+
+```
+
+
+# Filling the blank
+
+## Boston Housing Data: Description and Objective
+
+The *ISLR2* package includes the **boston** dataset, a classic benchmark for studying linear regression and predictive modelling.  
+It contains information on housing values and neighborhood characteristics for **506 census tracts** in the boston metropolitan area.
+
+The main outcome of interest is:
+
+- **medv** — the *median* value of owner-occupied homes (in \$1000s)
+
+The dataset also includes **12 predictors** describing socioeconomic, environmental, and structural characteristics of each tract. Examples include:
+
+- **rm** — average number of rooms per dwelling  
+- **age** — proportion of owner-occupied units built before 1940  
+- **lstat** — percent of households with low socioeconomic status  
+- **crim** — per-capita crime rate  
+- **nox** — air pollution concentration  
+- **tax** — property tax rate  
+
+
+Our objective is to **build and interpret regression models** that predict housing values (*medv*) using the available predictors.  
+
+Through this process, we will:
+
+1. Explore how each variable relates to housing prices through visualisation  
+2. Fit simple and multiple linear regression models using **tidymodels**  
+3. Assess uncertainty, interpret coefficients, and diagnose model fit  
+4. Incorporate interactions and polynomial terms to capture nonlinear patterns  
+5. Compare models to determine which predictors meaningfully explain variation in prices  
+
+## Exploratory Data Analysis (EDA)
+
+```{r}
+boston |> skimr::skim()
+```
+
+
+Since our goal is to **predict median home value (medv)**, we begin by exploring how potential predictors relate to it. Visual inspection and correlation analysis help us identify which variables appear most strongly associated with housing values.
+
+We start by looking at how  **lstat** (the percentage of households with low socioeconomic status) relates to **medv**. We can create a scatter plot to visualise this relationship.
+
+```{r}
+boston |>
+  ggplot(aes(lstat, medv)) +
+  geom_point(alpha = 0.6) +
+  labs(title = "medv vs lstat",
+       subtitle = "Negative relationship with growing uncertainty at high lstat")
+```
+
+Among the predictors in the boston dataset, **lstat** shows a particularly strong relationship with medv. To build intuition before moving to more complex models, we start by fitting a **simple linear regression** using lstat as the sole predictor.
+
+This gives us a baseline understanding of how socioeconomic disadvantage relates to housing prices, and it allows us to interpret a clean, one-variable model before adding complexity.
+
+## Simple Linear Regression (Tidymodels)
+
+### Split data
+
+```{r}
+set.seed(123)
+spl <- ???(boston, prop = 0.8)
+train <- ???(spl)
+test  <- ???(spl)
+```
+
+### Creating a modelling recipe
+
+In tidymodels, a *recipe* is used to define the structure of a model before any fitting takes place.  
+
+It specifies:
+
+- which variable we want to predict (**medv**)  
+- which predictors we will use (**lstat**)  
+- any preprocessing steps we may later add (such as transformations or interactions)
+
+Creating a recipe makes the modelling pipeline more modular and reproducible.  
+At this stage, the recipe simply records that we intend to fit a model of median home value as a function of lstat in the training data.
+
+
+```{r}
+rec_simple <- ???(??? ~ lstat, data = ???)
+```
+
+
+The recipe stores the formula and handles preprocessing later.
+
+
+### Model specification
+
+After defining the modelling recipe, the next step is to specify the type of model we want to fit.  
+
+Here, we choose a **linear regression** model using the `linear_reg()` function from the **parsnip** package, which is part of the tidymodels ecosystem. We then set the computational engine to `"lm"` to use R’s built-in linear modelling functions.
+
+The resulting object, `mod_linear`, stores:
+
+- the fact that we are using **linear regression**,  
+- the choice of estimation engine (**`lm`**), and  
+- the default settings for how the model should be fitted.
+
+What it does *not* yet contain is the formula or the data—those components come from the recipe and are added later in the workflow. 
+
+This separation keeps the modelling pipeline modular and makes it easy to swap in different model types without changing the rest
+
+
+```{r}
+mod_linear <- ???() |> set_engine("???")
+```
+
+
+### Workflow and model fitting
+
+Once we have defined both the recipe (which sets out the model formula and any preprocessing steps) and the model specification (which defines the type of model we want to use), the next step is to bring them together in a **workflow**.  
+
+A workflow is a central tidymodels object that keeps track of every step involved in a modelling process. This makes the analysis reproducible, modular, and easy to extend. A workflow bundles the components of a modelling pipeline into a single object, ensuring that:
+
+- the recipe is applied consistently during training and when making predictions,  
+- the correct model specification and engine are used, and  
+- the entire process is reproducible and easy to modify.
+
+In the code below, each function plays a specific role:
+
+- **`add_recipe(rec_simple)`** attaches the recipe we defined to the workflow.  
+  This tells tidymodels which variables will be used (the model formula) and how they should be preprocessed.
+
+- **`add_model(mod_linear)`** attaches the model specification we have defined.  
+  This identifies the type of model to fit (linear regression) and the engine to use (`"lm"`).
+
+- **`fit(wf_simple, data = train)`** executes the entire pipeline on the training data. 
+
+Tidymodels applies the recipe first, then fits the linear regression model using the processed data.
+
+Finally, `tidy(fit_simple)` extracts the fitted coefficients in a clean, readable table.
+
+```{r}
+wf_simple <- ???() |> ???(rec_simple) |> ???(mod_linear)
+fit_simple <- ???(wf_simple, data = ???)
+tidy(fit_simple)  
+```
+
+### Prediction
+
+Once the model has been fitted to the training data, we assess how well it generalises to new observations by making predictions on the **test set**.  
+
+The `predict()` function applies the entire workflow—preprocessing from the recipe and the fitted linear regression model—to the test data.  
+
+This produces predicted values of `medv` for each observation in the test set.
+
+```{r}
+preds_simple <- ???(fit_simple, ???)
+preds_simple
+```
+
+We then use `bind_cols()` to attach these predictions to the original test data, allowing us to compare predicted and actual values directly.  
+
+```{r}
+preds_actual <- ??? |> bind_cols(???)
+preds_actual |>
+  ggplot(aes(???,.???)) +
+  geom_point(alpha = 0.6) +
+  geom_abline(colour = "red") +
+  labs(title = "Predicted vs Actual")
+```
+
+# Adding interactions, qualitative predictors and non-linear relationship
+
+## Interaction Terms
+
+To allow the relationship between socioeconomic status and home value to vary with the age of the housing stock, we add an interaction between lstat and age. Using step_interact(), the recipe creates a new predictor representing their product, enabling the model to capture non-additive effects. The fitted model includes both main effects and the interaction term, and tidy() reports their estimated contributions.
+
+```{r}
+rec_int <- recipe(medv ~ lstat + age, data = train) |>
+  step_interact(terms = ~ lstat:age)
+
+fit_int <- workflow() |>
+  add_recipe(rec_int) |>
+  add_model(mod_linear) |>
+  fit(train)
+
+tidy(fit_int)
+```
+
+ 
+## Add non-linearity 
+
+**Polynomial Regression-Quadratic term for lstat**
+
+To capture potential non-linearity in the relationship between lstat and median home value, we extend the simple linear model by adding a quadratic term. The recipe uses step_poly() to generate both the linear and squared versions of lstat, allowing the model to fit a nonlinear trend. 
+
+```{r}
+rec_poly <- recipe(medv ~ lstat, data = train) |>
+  step_poly(lstat, degree = 2)
+
+fit_poly <- workflow() |>
+  add_recipe(rec_poly) |>
+  add_model(mod_linear) |>
+  fit(train)
+
+tidy(fit_poly)
+```
+
+In this context, `degree = 2` means that the recipe creates a second-degree polynomial of the predictor. For a variable like `lstat`, a degree-2 polynomial includes both the original term (`lstat`) and its squared term (`lstat^2`). This leads to a model of the form:
+
+$$
+\text{medv} = \beta_0 + \beta_1\,\text{lstat} + \beta_2\,\text{lstat}^2 + \varepsilon
+$$
+
+Adding the squared term allows the regression to capture curvature in the relationship between `lstat` and `medv`, rather than forcing a straight-line fit. A quadratic term is helpful when the effect changes at different levels of the predictor.
+
+
+## Qualitative Predictors
+
+In this example, we examine how to include categorical variables and interaction effects in a linear regression model using the Carseats dataset. We begin with a boxplot of Sales by ShelveLoc to see how sales differ across the shelf-location categories. This gives a quick visual sense of whether a qualitative predictor may be informative.
+
+**Boxplot**
+
+```{r}
+carseats |>
+  ggplot(aes(ShelveLoc, Sales)) +
+  geom_boxplot()
+```
+
+To fit the model, we split the data into training and test sets and build a tidymodels recipe that prepares the predictors for regression. Because we have variables in Carseats that are categorical, we use step_dummy(all_nominal_predictors()) to convert them into dummy (one-hot encoded) variables. We then add two interaction terms—Income × Advertising and Price × Age—using step_interact(), allowing the effect of one variable to depend on the level of another.
+
+We specify a linear regression model, combine it with the recipe in a workflow, and fit it to the training data. The tidy() output reports the estimated effects of all predictors and the added interactions. This workflow demonstrates how tidymodels cleanly separates preprocessing steps from model fitting while allowing us to incorporate both qualitative predictors and meaningful interaction effects.
+
+```{r}
+set.seed(123)
+spl <- initial_split(carseats, prop = 0.8)
+train <- training(spl)
+test  <- testing(spl)
+
+rec_dummy <- recipe(Sales ~ ., data = carseats) |>
+  step_dummy(all_nominal_predictors()) |>
+  step_interact(terms = ~ Income:Advertising + Price:Age)
+
+mod_linear_dummy <- linear_reg() |> set_engine("lm")
+
+fit_dummy_interaction <- workflow() |>
+  add_recipe(rec_dummy) |>
+  add_model(mod_linear_dummy) |>
+  fit(train)
+
+tidy(fit_dummy_interaction)
+
+```

@@ -1,0 +1,344 @@
+---
+title: "Lecture 2 — Introduction to Business Data Analytics"
+subtitle: "Teaching Notes and Slides"
+author: "Your Name"
+format: 
+  revealjs:
+    theme: simple
+    slide-number: true
+    transition: fade
+    incremental: true
+---
+
+# Slide 1 — Why Data Matters in Modern Business
+
+- **Uber uses real-time data** to match riders and drivers, set prices, and reduce waiting times.  
+- **Amazon analyzes customer behaviour** to personalize shopping and manage stock.  
+- **Lidl applies analytics** to optimize pricing and store performance.  
+- **Cardiff Bus uses passenger data** to forecast demand and improve routes.  
+
+::: {.callout-note title="Instructor Notes"}
+**Goal:** Engage students with familiar, everyday examples of analytics in action.  
+- Ask: “When was the last time you saw data shown to you — like a map of your Uber driver or a bus arrival dashboard — that helped you make a decision?”  
+- Explain how these examples depend on real-time data and models.  
+- Emphasize that data = a strategic asset for decisions.  
+- Transition: *“So, how did we move from gut feeling to data-driven management?”*
+:::
+
+---
+
+# Slide 2 — From Gut Feeling to Data-Driven Decisions
+
+- **Traditional decisions relied on intuition and experience.**  
+- **Modern organizations test assumptions with evidence.**  
+- **Analytics complements—not replaces—human judgment.**  
+- **Data-driven cultures embed measurement and learning.**
+
+::: {.callout-note title="Instructor Notes"}
+**Goal:** Show evolution from intuition to evidence-based decision-making.  
+- Example: store manager forecasting weekend stock by experience vs. data trends.  
+- Ask: “Which would you trust more?”  
+- Stress that analytics strengthens, not replaces, human expertise.  
+- Transition: *“Let’s define what Business Analytics actually is.”*
+:::
+
+---
+
+# Slide 3 — What Is Business Analytics?
+
+- **Uses data, statistics, and models** to guide decisions.  
+- **Transforms data into insights and insights into actions.**  
+- **Combines business, data, and analytical skills.**  
+- **Creates value** by improving performance and predictions.
+
+::: {.callout-note title="Instructor Notes"}
+**Goal:** Provide a clear, working definition.  
+- Ask: “Is analytics just about numbers, or is it broader?”  
+- Framework: Business Question → Data → Analysis → Insight → Action → Value.  
+- Examples: retail forecasting, HR turnover, public transport planning.  
+- Visual: cycle diagram showing *Data → Insight → Decision → Value.*  
+:::
+
+---
+
+# Slide 4 — The Four Types of Analytics
+
+- **Descriptive — What happened?** (Reports, KPIs)  
+- **Diagnostic — Why did it happen?** (Root cause, comparisons)  
+- **Predictive — What could happen?** (Forecasting, ML)  
+- **Prescriptive — What should we do?** (Optimization, simulation)
+
+::: {.callout-note title="Instructor Notes"}
+**Goal:** Explain analytics maturity and four types.  
+- Show a color-blind–friendly **pyramid or staircase** (Descriptive → Diagnostic → Predictive → Prescriptive).  
+- Example (Cardiff Bus):  
+  - Descriptive: last week’s ridership.  
+  - Diagnostic: why it fell.  
+  - Predictive: next week’s forecast.  
+  - Prescriptive: best route schedule.  
+- Note: Some sources group Diagnostic under Descriptive — explain both views.  
+:::
+
+---
+
+# Slide 5 — The Analytics Process: From Data to Insight
+
+1. Define the business problem.  
+2. Collect and prepare data.  
+3. Analyze and model.  
+4. Communicate insights.  
+5. Take action and evaluate.
+
+::: {.callout-note title="Instructor Notes"}
+**Goal:** Show analytics as an iterative process.  
+- Visualize: *Problem → Data → Analysis → Insight → Action → Value.*  
+- Stress feedback loops and continuous improvement.  
+- Example: applying analytics to adjust bus timetables.  
+- Transition: *“Now let’s see what enables this process — data and technology.”*
+:::
+
+---
+
+# Slide 6 — The Role of Data and Technology
+
+- **Data is the raw material of analytics.**  
+- **Technology enables large-scale collection and analysis.**  
+- **From Excel to cloud and AI platforms.**  
+- **Governance ensures quality, security, and ethics.**
+
+::: {.callout-note title="Instructor Notes"}
+**Goal:** Highlight data and tech foundations.  
+- Example: Uber and Cardiff Bus rely on real-time data streams.  
+- Explain the data pipeline: collect → store → process → analyze → visualize → decide.  
+- Emphasize data quality, governance, and ethical handling.  
+- Ask: “Have you used tools like Power BI, Excel, or Python in decision-making?”  
+- Transition: *“Let’s link this back to actual business decisions.”*
+:::
+
+---
+
+# Slide 7 — Business Context: Connecting Analytics to Decisions
+
+- **Analytics starts with a business question.**  
+- **Supports operational, tactical, and strategic decisions.**  
+- **Aligns insights with business goals.**  
+- **Translates results into actionable recommendations.**
+
+::: {.callout-note title="Instructor Notes"}
+**Goal:** Connect analytics outputs to business use.  
+- Ask: “If we have great data but no decision to make, is the data valuable?”  
+- Explain decision types:  
+  - Operational (daily scheduling),  
+  - Tactical (monthly planning),  
+  - Strategic (long-term investments).  
+- Emphasize collaboration between analysts and managers.  
+- Visual: *Data → Analysis → Insight → Decision → Action.*  
+- Transition: *“Now let’s talk about the people behind analytics.”*
+:::
+
+---
+
+# Slide 8 — The People Side of Analytics
+
+- **Analytics is a team effort.**  
+- **Different roles, one goal.**  
+- **Communication and storytelling are crucial.**  
+- **A data-driven culture builds trust and curiosity.**
+
+::: {.callout-note title="Instructor Notes"}
+**Goal:** Emphasize human collaboration and communication.  
+- Discuss roles: leaders, analysts, translators, decision-makers.  
+- Ask: “Who actually uses the insights — the data scientist or the manager?”  
+- Stress storytelling: visuals and clarity bridge the gap between numbers and action.  
+- Reflection: “If no one understands your analysis, does it have value?”  
+- Transition: *“When people and data interact, we face new challenges — ethics.”*
+:::
+
+---
+
+# Slide 9 — Challenges and Ethical Considerations
+
+- **Bias and poor data quality distort results.**  
+- **Privacy and security must be protected.**  
+- **Ethical use of analytics ensures fairness and trust.**  
+- **Human oversight is essential.**
+
+::: {.callout-note title="Instructor Notes"}
+**Goal:** Promote responsible, ethical analytics.  
+- Case: hiring or pricing algorithms introducing bias.  
+- Discuss:  
+  - Data bias and error.  
+  - Privacy and consent.  
+  - Transparency and accountability.  
+- Ask: “Who is responsible if an algorithm’s outcome causes harm?”  
+- Key takeaway: *Good analytics is ethical, fair, and explainable.*  
+- Transition: *“How can organizations grow to use analytics responsibly?”*
+:::
+
+---
+
+# Slide 10 — Becoming an Analytics-Driven Organization
+
+- **Analytics maturity evolves over time.**  
+- **From ad-hoc reports to predictive strategy.**  
+- **Leadership and training drive adoption.**  
+- **Continuous learning defines data-driven culture.**
+
+::: {.callout-note title="Instructor Notes"}
+**Goal:** Conclude by showing analytics maturity and long-term vision.  
+- Show “Analytics Maturity Curve”: Descriptive → Diagnostic → Predictive → Prescriptive → Strategic.  
+- Explain that maturity = culture + leadership, not just tools.  
+- Ask: “Where is your organization (or a case) on this curve?”  
+- End with: “Analytics isn’t a toolset — it’s a mindset.”  
+:::
+
+---
+
+# 📚 References
+
+- Richardson, R. (2022). *Introduction to Business Analytics.* McGraw-Hill.  
+- Koole, G. (2021). *Introduction to Business Analytics.* IBA Press.  
+- IIBA (2020). *Introduction to Business Data Analytics: An Organizational View.*  
+- Park University Blog (2023). *What is Business Analytics?*  
+- CliffsNotes (2024). *Business Analytics Overview.*
+
+
+
+# Slide 1 — The Role of Data in Analytics
+
+- **Data is the foundation** of all analytics.
+- Different **decisions need different data**.
+- Good data turns **questions into measurable insights**.
+- **Garbage in, garbage out** — poor data → poor analytics.
+
+::: {.callout-note title="Instructor Notes"}
+**Purpose:** Reframe analytics as data understanding first, modeling second.
+- Ask: *“If analytics turns data into insight — what data are we actually using?”*
+- Emphasize: models can’t rescue bad data; quality drives credibility.
+- Set expectation: this lecture equips students to recognize good data, structure it, and assess quality.
+- Transition: *“Let’s map the main data types and where they come from.”*
+:::
+
+---
+
+# Slide 2 — Types & Sources of Data
+
+- **Structured:** tables, transactions, spreadsheets (rows/columns).
+- **Semi-structured:** logs, JSON, web analytics, event streams.
+- **Unstructured:** text, images, audio, social posts.
+- **Sources:** internal (ops, CRM, ERP), external (market, open data, weather).
+
+::: {.callout-note title="Instructor Notes"}
+**Purpose:** Make the variety of data concrete.
+- Give examples: ticketing (structured), server logs (semi), customer reviews (unstructured).
+- Internal vs external: finance/HR/ops vs demographics, macro data, APIs.
+- Mini-activity: *“Which types does a bus operator/retailer/bank likely have?”*
+- Transition: *“In this module, we focus on the most common analytics format: rectangular data.”*
+:::
+
+---
+
+# Slide 3 — Focus of This Module: Rectangular Data
+
+- **Rectangular = tabular**: rows = observations; columns = variables.
+- Common formats: **CSV, TSV, XLSX, SQL tables**.
+- Ubiquitous in business: **transactions, surveys, ridership, sales**.
+- Foundation for **statistics, ML, BI dashboards**.
+
+::: {.callout-note title="Instructor Notes"}
+**Purpose:** Define the default working format.
+- Show a small table: each row = a transaction/trip; each column = a feature (date, route, price, count).
+- Stress interoperability: Excel/Power BI/R/Python all expect tables.
+- Caveat: tables can still be messy — structure ≠ tidy. Next slide tackles *tidy vs untidy*.
+:::
+
+---
+
+# Slide 4 — Tidy vs Untidy Data
+
+- **Tidy data** (Wickham):  
+  - Each **variable** → a column  
+  - Each **observation** → a row  
+  - Each **value** → a cell
+- **Untidy:** merged cells, headers as data, multiple concepts per column, inconsistent types.
+- **Tidy → analysis-ready**; untidy → **clean first**.
+
+::: {.callout-note title="Instructor Notes"}
+**Purpose:** Give a testable rule for readiness.
+- Example (untidy): months as separate columns; totals mixed into data rows.
+- Example (tidy): single `month` column with values stacked; one observation per row.
+- Stress benefits: reproducibility, fewer errors, simpler joins/aggregations.
+- Tip: keep an eye on **IDs, dates, units** — common sources of untidiness.
+:::
+
+---
+
+# Slide 5 — Data Quality: Why It Matters
+
+- **Quality dimensions:** accuracy, completeness, consistency, timeliness, validity.
+- Common issues: **missing values, duplicates, inconsistent codes, outliers**.
+- **Context-first:** what’s “good enough” depends on the **decision**.
+- No amount of modeling fixes **systematically bad data**.
+
+::: {.callout-note title="Instructor Notes"}
+**Purpose:** Link quality to decision risk.
+- Concrete examples:  
+  - Missing passenger counts on peak days (biases forecasts).  
+  - Route IDs changing format (breaks joins).  
+  - Delayed data feeds (misleads operations).
+- Encourage quantitative checks (rates of missingness, duplicate %).
+- Set up the need for a **repeatable quality framework**.
+:::
+
+---
+
+# Slide 6 — A Practical Framework for Data Quality Checks
+
+1. **Define purpose & critical fields**  
+   *Which decisions? Which variables matter most?*
+2. **Profile the data**  
+   *Types, ranges, unique IDs, missingness, duplicates, date/time sanity.*
+3. **Validate business rules**  
+   *e.g., counts ≥ 0; dates in operating hours; codes in reference lists.*
+4. **Detect anomalies & outliers**  
+   *Distribution checks, thresholds, unexpected spikes/drops.*
+5. **Document & remediate**  
+   *Record issues, fixes (impute, drop, correct), and residual risks.*
+
+::: {.callout-note title="Instructor Notes"}
+**Purpose:** Give students a checklist they can apply immediately.
+- Start with **purpose** to avoid over-engineering checks that don’t matter.
+- Profiling ideas: schema summary, min/max/mean, cardinality, datetime gaps.
+- Business rules tie data to reality: “no negative tickets”, “valid route codes”, “timestamps in service window”.
+- Anomalies: compare to prior period; use simple z-scores or IQR early on.
+- Documentation: before/after row counts; a log of cleaning steps; note assumptions.
+- Close with: *“Quality is a process, not a one-off step.”*
+:::
+
+---
+
+# Slide 7 — Putting It Together (Mini Checklist)
+
+- **Question fit:** Does the data answer the decision at hand?
+- **Rectangular & tidy:** Rows/columns and tidy rules satisfied?
+- **Quality profiled:** Missingness, duplicates, ranges, IDs checked?
+- **Rules validated:** Business constraints enforced?
+- **Actions logged:** Cleaning steps, assumptions, remaining risks documented?
+
+::: {.callout-note title="Instructor Notes"}
+**Purpose:** Provide a one-slide takeaway students can reuse in labs.
+- Suggest they paste this checklist into each assignment’s README.
+- Encourage pairing: one student profiles, the other validates rules; compare notes.
+- Transition to lab or case: *“Let’s run this on our ridership CSV.”*
+:::
+
+---
+
+# References
+
+- Richardson, R. (2022). *Introduction to Business Analytics*. McGraw-Hill.  
+- Koole, G. (2021). *Introduction to Business Analytics*. IBA.  
+- IIBA (2020). *Introduction to Business Data Analytics: An Organizational View*.  
+- Wickham, H. (2014). *Tidy Data*. Journal of Statistical Software.  
+- CliffsNotes (2024). *Business Analytics Overview*.  
+- Park University Blog (2023). *What is Business Analytics?*

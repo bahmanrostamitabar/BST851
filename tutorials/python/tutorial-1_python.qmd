@@ -1,0 +1,107 @@
+---
+title: "Tutorial 1- Essentials in Positron, and R"
+author: 
+  - name: "Bahman Rostami-Tabar"
+    affiliation: "Professor, Director, Data Lab for Social Godo Reserach Group, Cardiff Business School"
+    affiliation-url: "https://profiles.cardiff.ac.uk/staff/rostami-tabarb"
+  - name: "Amir (Hossein) Ghadiri"
+    affiliation: "PhD student, Cardiff Business School"
+    affiliation-url: "https://amirhosseinghdv.github.io/"  
+  - name: "Mustafa Aslan"
+    affiliation: "PhD student, Cardiff Business School"
+    affiliation-url: "https://profiles.cardiff.ac.uk/research-staff/aslanm"  
+date: 2 October 2025
+format:
+  pdf: 
+    toc: true          # include a table of contents
+    number-sections: true
+  html:
+    code-fold: true    # allow folding of code blocks
+    toc: true
+    toc-depth: 2
+execute:
+  echo: true           # whether to show code
+  eval: false           # whether to run code
+  warning: false       # suppress warnings
+  message: false       # suppress messages
+---
+
+# Introduction
+
+In this tutorial, we will set up the essential tools required for doing data analytics using Positron, and R. The focus is on creating a working environment where you can smoothly install software, organise projects, load data, and generate reproducible results. By the end of this tutorial, you will be able to use both R and Python within Positron to write code, run analyses, and document your workflow. To practice these essentials, we will use the Gapminder dataset to create a simple visualisation that illustrate the relationship between health and wealth across countries.
+
+# Learning objectives
+
+By the end of this tutorial, you should be able to:
+
+- Install and configure Positron, and R, ensuring your development environment is ready for analytics work.
+
+- Create and organise a Positron project with folders such as data and img to keep your workflow structured and reproducible.
+
+- Install and load key packages in both R (tidyverse) for data manipulation and visualization.
+
+- Perform basic tasks—writing code, obtaining outputs, and taking notes—using three different approaches: the console, scripts, and Quarto documents.
+
+- Apply these skills to a real dataset by filtering, visualizing, and annotating results in both R and Python.
+
+
+# Python essentials
+
+
+1. Install Python
+
+2. create a virtual environment and activate it
+
+3. Install packages Or create requirments.txt file and run
+
+   - `pip install pandas plotnine`
+   - `pip install -r requirements.txt`
+
+4. Import necessary libraries
+
+   - `import pandas as pd`
+   - `from plotnine import ggplot, aes, geom_point, labs, theme_classic`
+
+5. Perform three tasks in Python when doing data analytics:
+
+   - Using Console
+   - Python script
+   - Quarto
+
+In this tutorial, we will practice using the following code chunk:
+
+
+```{python}
+#| label: tasks-python
+#| echo: true
+#| eval: false
+import pandas as pd
+from plotnine import ggplot, aes, geom_point, labs, theme_classic
+
+# Import data into Python
+gapminder = pd.read_csv("data/gapminder.csv")
+
+# Filter data to show only observation for 2007
+gapminder_filtered = gapminder[gapminder["year"] == 2007]
+
+# Create the plot
+plot = (
+    ggplot(gapminder_filtered, aes(x="gdpPercap", y="lifeExp",
+                                   size="pop", color="continent"))
+    + geom_point()
+    + labs(
+        x="GDP per capita",
+        y="Life expectancy",
+        title="Health and wealth are strongly related",
+        subtitle="142 countries; 2007 only",
+        caption="Source: The Gapminder Project",
+        color="Continent",
+        size="Population"
+    )
+    + theme_classic()
+)
+
+# Display the plot
+plot.show()
+
+```

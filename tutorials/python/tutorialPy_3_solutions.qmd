@@ -1,0 +1,418 @@
+---
+title: "Tutorial 3 - Data Visualisation"
+author: 
+  - name: "Bahman Rostami-Tabar"
+    affiliation: "Professor, Director, Data Lab for Social Godo Reserach Group, Cardiff Business School"
+    affiliation-url: "https://profiles.cardiff.ac.uk/staff/rostami-tabarb"
+  - name: "Udeshi (Merennage) Salgado"
+    affiliation: "PhD student, Cardiff Business School"
+    affiliation-url: "https://profiles.cardiff.ac.uk/research-staff/salgadomum"  
+  - name: "Mustafa Aslan"
+    affiliation: "PhD student, Cardiff Business School"
+    affiliation-url: "https://profiles.cardiff.ac.uk/research-staff/aslanm"  
+date: 16 October 2025
+format:
+  html:
+    code-fold: true    # allow folding of code blocks
+    toc: true
+    toc-depth: 2
+  pdf: 
+    toc: true          # include a table of contents
+    number-sections: true
+execute:
+  cache: true          # cache code chunks
+  echo: true           # whether to show code
+  eval: false           # whether to run code
+  warning: false       # suppress warnings
+  message: false       # suppress messages
+---
+
+
+```{python}
+#| label: setup
+#| include: false
+# Load packages
+from skimpy import clean_columns, skim
+import pandas as pd
+from plotnine import *
+
+# Read data — ensure 'walmart.csv' is in the data directory
+walmart = pd.read_csv("tutorial_3/data/walmart.csv")
+# Clean column names
+walmart = clean_columns(walmart)
+# Convert data types
+walmart["store"] = walmart["store"].astype("str")
+# map holiday_flag to yes/no
+walmart["holiday_flag"] = walmart["holiday_flag"].map({0: "No", 1:"Yes"})
+walmart["date"] = pd.to_datetime(walmart["date"], format="%d/%m/%Y")
+```
+
+
+:::{.callout-warning}
+You need to first check if you have the required packages installed. If not, please install them using `pip install "package_name"` command.
+
+Also, please ensure that the `walmart.csv` file is placed in the `data` folder of your project directory before running this tutorial.
+:::
+
+# Overview
+
+This tutorial introduces **data visualisation in Python** using **pandas**, **ggplot2** and **seaborn**, grounded in a real-world retail analytics context. Through the **Walmart weekly sales dataset**, we will practice turning raw data into clear, defensible insights by building time series, comparison, and relationship plots.
+
+We will work through three tiers of practice:
+
+- **Section 1 — Run-only:** complete code you can run to reproduce plots and analyses.  
+- **Section 2 — Fill-in-the-blanks:** partially complete code with `???` for you to replace.  
+- **Section 3 — No code (prompts):** questions only, so you write the code from scratch.
+
+
+## What questions can we answer with this data?
+
+Before plotting, it helps to articulate the decisions and hypotheses the visuals should serve. With weekly store-level sales and macro context, we can address questions such as:
+
+- **Holiday lift:** Do weekly sales increase in holiday weeks? By how much, and does it vary by store? 
+- **Store performance:** Which stores lead on **total** sales and on **average** sales?  
+- **Temporal structure:** Are there **seasonal** or **trend** patterns in total weekly sales?  
+- **External drivers:** How do **temperature**, **fuel prices**, **unemployment**, and **CPI** relate to weekly sales, and are any relationships conditional on holidays?  
+
+
+These questions guide the plots you’ll build and the design choices you’ll make (faceting, ordering, encodings, and annotations).
+
+## Learning objectives
+
+By the end of this tutorial, you will be able to:
+
+1. Create common graphics (e.g., scatter, bar, line, time series, boxplot) with **ggplot2**.  
+2. Use **aesthetics** (color, size, shape) to encode variables effectively.
+3. Apply **faceting**, **ordering**, and **themes** to communicate clearly.  
+4. Choose appropriate visualisations for different data types and questions.
+5. Interpret visualisations and justify design choices.
+
+# Dataset
+
+The Walmart dataset contains weekly sales at the store level along with contextual features. Each observation corresponds to a **store–week** pair, enabling both cross-sectional comparison and time-series exploration.
+
+**Columns:**
+
+- `Store` — store identifier (integer)  
+- `Date` — week ending date (string like `05/02/2010`)  
+- `Weekly_Sales` — weekly sales amount (numeric, dollars)  
+- `Holiday_Flag` — 1 if the week includes public holiday, else 0  
+- `Temperature` — average temperature for the week (Fahrenheit)  
+- `Fuel_Price` — average fuel price in the region (dollars/gallon)
+- `consumer price index` — CPI value in the rgion, a measure of inflation
+- `Unemployment` — unemployment rate
+
+::: callout-tip
+`Date` in `wallmaer.csv` appears in **day/month/year** format in the csv file. We'll parse it using **to_datetime**, which is a function in **pandas** to work with date and time data.
+:::
+
+## Why this dataset is useful (mini case study)
+
+From a retail-operations perspective, understanding **when** and **why** sales move helps with staffing, inventory positioning, and local promotions. Holiday effects can guide seasonal ordering; macro indicators like **fuel prices** and **unemployment** capture consumer spending constraints; **temperature** can proxy for weather-sensitive demand. Visualising these relationships provides fast, decision-ready signals: e.g., identifying stores with strong holiday lifts, spotting changing baselines across years, or detecting nonlinearities (like diminishing returns) that inform pricing and assortment strategies. The same workflow generalises to other networks—supermarkets, pharmacies, or convenience chains—where weekly cadence and local context matter.
+
+
+# Run the code 
+
+Please run the code below and observe the output, try to undestad t code, and link it to elements of the visualisation! Before that, let's have a quick look at the data
+
+```{python}
+# Missingness overview
+skim(walmart)
+
+```
+
+Now, let's create some plots, we start woth a simple bar plot that hows total sales for stores with holiday vs non-holiday weeks
+
+```{python}
+
+plot = (
+    ggplot(walmart, aes(x='holiday_flag')) +     # map category to x
+    geom_bar() +
+    coord_flip() +                              # flip axes for horizontal bars
+    labs(title="Holiday vs Non-holiday Weeks",
+         x="Holiday Flag",
+         y="count") +
+    theme_minimal()
+)
+plot.show()
+```
+
+We then create a horizontal bar chart ordered by mean weekly sales, this highlgihts which store has the highest average sales
+
+```{python}
+mean_by_store = (
+    walmart.groupby('store')['weekly_sales']
+    .sum()
+    .reset_index()
+    .rename(columns={'weekly_sales': 'mean_sales'})
+)
+mean_by_store = mean_by_store.sort_values(by='mean_sales', ascending=False)
+
+mean_by_store['store'] = pd.Categorical(
+    mean_by_store['store'],
+    categories=mean_by_store['store'].tolist()[::-1],  # <--- use .tolist() for correct order!
+    ordered=True
+)
+
+
+#  formatting function for dollar amounts
+def dollar_format(x):
+    # x can be a single number or an array-like (plotnine calls with array)
+    try:
+        return ["${:,.0f}".format(val) for val in x]
+    except TypeError:
+        return "${:,.0f}".format(x)
+
+
+plot = (ggplot(data = mean_by_store, 
+mapping = aes(x = "store", y = "mean_sales")) +
+  geom_col() +
+  coord_flip() +
+  labs(title = "Mean Weekly Sales by Store",
+       x = "Store", y = "Mean Weekly Sales (USD)") +
+  scale_y_continuous(labels = dollar_format) +
+  theme_minimal()
+)
+plot.show()
+```
+
+Next, we explore what are the topv six total sales stores,  and visulaise it with a bar plot to see the difference between holiday vs non-holiday weeks using stacked barplot
+
+```{python}
+# Top 6 stores by total sales — small multiples
+
+top_stores = walmart.groupby('store')['weekly_sales'].sum().nlargest(6).reset_index().rename(columns={'weekly_sales': 'total_sales'})['store'].tolist()
+
+
+walmart_top6 = walmart[walmart['store'].isin(top_stores)].groupby(['store','holiday_flag'])['weekly_sales'].sum().reset_index().rename(columns={'weekly_sales': 'total_sales'})
+
+plot = (
+ggplot(data = walmart_top6, 
+mapping = aes(x = "store", y = "total_sales", fill = "holiday_flag"))
++ geom_col() + theme_minimal() +
+  labs(title = "Total Sales by Holiday vs Non-holiday Weeks for Top 6 Stores",
+       x = "Store", y = "Total Sales (USD)", fill = "Holiday Flag")+
+  scale_y_continuous(labels = dollar_format)
+)
+plot.show()
+```
+
+Next we use position dodge to separate the bars for holiday vs non-holiday weeks, this ia preferred to a stacked bar plot as it allows for easier comparison between the two groups
+
+```{python}
+plot = (
+ggplot(data = walmart_top6,
+mapping = aes(x = "store", y = "total_sales", fill = "holiday_flag"))+ geom_col(position = "dodge") +
+  theme_minimal() +
+  labs(title = "Total Sales by Holiday vs Non-holiday Weeks for Top 6 Stores",
+       x = "Store", y = "Total Sales (USD)", fill = "Holiday Flag") +
+  scale_y_continuous(labels = dollar_format)
+)
+plot.show()
+```
+
+# Fill in the blanks
+
+We now want to explore the data further, but this time you will need to fill in the blanks (???) yourself. 
+Replace `???` with the correct dataset names, columns, geoms, or arguments, then run the code to verify your solution.
+
+We start by looking at overall weekly sales across time. This helps us identify any trends or seasonal patterns.
+
+```{python}
+# Overall weekly sales across time
+w_overall = walmart.groupby("date")["weekly_sales"].sum().reset_index()
+
+plot = (
+    ggplot(data=w_overall, mapping=aes(x="date", y="weekly_sales")) +
+    geom_line(size=0.6) +
+    geom_smooth(method="loess", se=False, color="blue") +
+    labs(title="Walmart: Total Weekly Sales Over Time",
+         x="Week", y="Total Weekly Sales (USD)") +
+    scale_y_continuous(labels=dollar_format) +
+    theme_minimal()
+)
+plot.show()
+```
+
+Next, we look at the top six stores by total sales and see how their weekly sales trend over time. 
+We use `facet_wrap` to create small multiples for each store.
+
+```{python}
+# Top 6 stores by total sales — small multiples
+walmart_ales_top6 = walmart[walmart["store"].isin(top_stores)]
+
+plot = (
+    ggplot(data = walmart_ales_top6, mapping = aes("date", "weekly_sales")) +
+    geom_line(alpha = 0.6) +
+    facet_wrap("~store", ncol = 3, scales = "free_y") +
+    labs(title = "Top 6 Stores by Total Sales — Weekly Trends",
+         x = "Week", y = "Weekly Sales (USD)") +
+    scale_y_continuous(labels = dollar_format) +
+    theme_minimal()+
+    scale_x_datetime(date_labels='%Y-%m') +  # <--- Only year and month
+    theme(axis_text_x = element_text(rotation=70, ha='right'))
+)
+plot.show()
+```
+
+We can also create interactive plots to explore the data further. For example, we can use `plotly` to create an interactive time series plot. 
+Remember to install the `plotly` package if you haven’t already. 
+
+```{python}
+import plotly.express as px
+import plotly.graph_objects as go 
+
+walmart_top6_ts = walmart[walmart['store'].isin(top_stores)][['store', 'date', 'weekly_sales']]
+
+fig = go.Figure()
+
+fig = px.line(
+    walmart_top6_ts,
+    x="date",
+    y="weekly_sales",
+    color="store",
+    title="Weekly Sales for Top 6 Stores"
+)
+
+fig.update_layout(
+    xaxis_title='Date',
+    yaxis_title='Weekly Sales (USD)',
+    yaxis_tickformat='$,'
+)
+fig.show()
+```
+
+We can also create seasonal plots, and subseries plots to further explore the data over time.
+```{python}
+plot = (
+    ggplot(walmart_top6_ts, aes(x="date", y="weekly_sales", color="store")) +
+    geom_line(size = 0.8) +
+    labs(title="Weekly Sales Over Time", x="Date", y="Weekly Sales") +
+    theme_minimal()
+)
+plot.show()
+```
+
+
+```{python}
+walmart_tsb = walmart_top6_ts.copy()
+
+import matplotlib.pyplot as plt
+import seaborn as sns
+from matplotlib.ticker import FuncFormatter
+
+
+walmart_tsb['month'] = walmart_tsb['date'].dt.strftime('%b')
+walmart_tsb['year'] = walmart_tsb['date'].dt.year
+
+g = sns.relplot(
+    data=walmart_tsb,
+    x='month',
+    y='weekly_sales',
+    hue='year',         
+    row='store',         
+    kind='line',         # Specify a line plot
+    height=2,            # Height of each facet
+    aspect=5,            # Aspect ratio (width/height)
+    palette='viridis',   # Color palette
+    errorbar=None,            # No confidence interval
+    legend='full',
+    linewidth=2
+)
+
+# Add grid and dollar formatting to all facets
+formatter = FuncFormatter(lambda x, pos: f'${x:,.0f}')
+for ax in g.axes.flat:
+    ax.grid(True)
+    ax.yaxis.set_major_formatter(formatter)
+
+g.set_axis_labels("Day of Year", "Weekly Sales")
+g.fig.suptitle("Weekly Sales by Store (Seasonal)", y=1.02) # y adjusts title position
+plt.show()
+```
+
+<!-- --- SUBSERIES will be added in future --- -->
+
+Let’s now explore the relationship between **temperature** and **weekly sales**. 
+We’ll use a scatter plot with a linear regression line to check for correlation.
+
+```{python}
+
+plot = (
+ggplot(data = walmart, mapping  = aes(x = "temperature", y = "weekly_sales")) +
+  geom_point(alpha = 0.35) +
+  geom_smooth(method = "lm", color = "blue", se = True) +
+  labs(title = "Temperature vs Weekly Sales",
+       x = "Temperature (°F)", y = "Weekly Sales (USD)")+
+  theme_minimal()+
+  scale_y_continuous(labels = dollar_format)
+)
+plot.show()
+```
+
+Next, we look at **fuel price vs weekly sales**, this time mapping colour to **unemployment rate** to examine interactions among three variables.
+
+```{python}
+
+plot = (
+ggplot(data=walmart, mapping=aes(x="fuel_price", y="weekly_sales", color="unemployment")) +
+  geom_point(alpha = 0.5, size = 0.5) +
+  labs(title = "Fuel Price vs Weekly Sales, by Unemployment",
+       x = "Fuel Price", y = "Weekly Sales (USD)", color = "Unemployment") +
+        scale_color_cmap(name='viridis')+
+  theme_minimal()+
+  scale_y_continuous(labels = dollar_format)
+)
+plot.show()
+```
+
+We can also visualise **consumer price index vs weekly sales**, again mapping colour to unemployment rate.
+
+```{python}
+plot = (
+ggplot(data = walmart, mapping = aes(x = "consumer_price_index", y = "weekly_sales")) +
+  geom_point(alpha = 0.5) +
+  labs(title = "CPI vs Weekly Sales",
+       x = "Consumer Price Index", y = "Weekly Sales (USD)") +
+  scale_y_continuous(labels = dollar_format) +
+  scale_color_cmap(name='viridis') +
+  theme_minimal()
+)
+plot.show()
+```
+
+Finally, let’s examine how holiday weeks impact sales using a boxplot.
+
+```{python}
+plot = (
+    ggplot(data=walmart, mapping=aes(x="holiday_flag", y="weekly_sales")) +
+    geom_boxplot() +
+    labs(title="Weekly Sales by Holiday Flag", x="Holiday Week", y="Weekly Sales (USD)") +
+    theme_minimal()+
+    coord_flip()
+)
+plot.show()
+```
+
+# No code 
+
+In this final section, you will write your own code to complete each task. Use **pandas** and **ggplot2**.
+
+1. **Holiday impact**  
+   Compute mean and median `weekly_sales` for holiday vs non-holiday weeks.  
+   Plot a **boxplot** overlay comparing the two groups.
+
+2. **Store leaderboard**  
+   Calculate **total** `weekly_sales` by `store`.  
+   Produce a horizontal bar chart ordered by total sales, with labels.  
+   Discuss whether the ranking changes if you use mean instead of total.
+
+3. **Multivariate faceting**  
+   Plot `fuel_price` vs `weekly_sales`; map **color** to CPI and **size** to Unemployment.  
+   Use `facet_grid(holiday_flag ~ .)` to compare holiday vs non-holiday.  
+   Provide one concrete insight per facet.
+
+::: callout-tip
+**Style tips**: You can explore different themes in `ggthemes`, use clear axis labels, and order categories meaningfully. 
+Limit the number of encodings per plot to avoid clutter.
+:::

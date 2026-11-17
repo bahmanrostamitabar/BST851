@@ -1,0 +1,14 @@
+project:
+  type: default
+
+format:
+  revealjs:
+    theme: [default, pp.scss]
+    multiplex: false
+    slide-number: c/t
+    incremental: false
+    menu: true
+
+execute:
+  cache: true
+  echo: true

@@ -1,0 +1,176 @@
+---
+title: "Tutorial 2- Data import, strucutres amd types"
+subtitle: "Working with rectangular data in R"
+author: 
+  - name: "Bahman Rostami-Tabar"
+    affiliation: "Professor, Director, Data Lab for Social Godo Reserach Group, Cardiff Business School"
+    affiliation-url: "https://profiles.cardiff.ac.uk/staff/rostami-tabarb"
+  - name: "Amir (Hossein) Ghadiri"
+    affiliation: "PhD student, Cardiff Business School"
+    affiliation-url: "https://amirhosseinghdv.github.io/"  
+  - name: "Mustafa Aslan"
+    affiliation: "PhD student, Cardiff Business School"
+    affiliation-url: "https://profiles.cardiff.ac.uk/research-staff/aslanm"
+date: 15 October 2026
+format:
+  html:
+    code-fold: true    # allow folding of code blocks
+    toc: true
+    toc-depth: 2
+  pdf: 
+    toc: true          # include a table of contents
+    number-sections: true
+execute:
+  echo: true           # whether to show code
+  eval: false           # whether to run code
+  warning: false       # suppress warnings
+  message: false       # suppress messages
+---
+
+
+```{r}
+#| label: setup
+#| echo: false
+
+library(tidyverse)
+library(janitor)
+library(skimr)
+```
+
+# Attention
+
+::: {.callout-note}
+Once you downlaod this qmd file, and the data file `coffee_sales.csv`, make sure to put the data file in the `data` folder of your project directory and qmd file in the root of your project directory (no folder).
+:::
+
+## Overview & Dataset
+
+This tutorial guides you through a practical excercise for working with rectangular data in R/python using a real coffee shop transactions file: `coffe_sales.csv`.
+
+::: {.callout-important}
+### About the data
+**`coffe_sales.csv`** contains **coffee shop transaction records**, including details about **items sold, total paid, date/time of purchase**, etc.  
+This is typical **point‑of‑sale (POS)** data used to analyze **sales trends, product performance, customer behavior, and operations**.
+:::
+
+
+::: {.callout-note}
+### What students will learn
+- Import CSV data with **readr** and examine structure as a tibble.  
+- Standardise column names with **`janitor::clean_names()`**.  
+- Assess **tidiness** and check whether variables/observations are structured correctly.  
+- Inspect **column types** (numeric, character, date/time).  
+- Run **data-quality checks** (missingness, duplicates, simple summaries).  
+- Apply **business-rule validations** for retail transactions (e.g., non‑negative quantity/price, total ≈ price × quantity).  
+- **Write outputs** (CSV & RDS) for reuse.  
+- *(Optional)* Read **multiple files**.
+:::
+
+
+## Read one CSV file
+
+You need to put the `coffe_sales.csv` file in your project `data` folder.
+
+```{r}
+raw_coffee_sale <- readr::read_csv("data/coffe_sales.csv")
+raw_coffee_sale
+raw_coffee_sale |> head()
+raw_coffee_sale |> tail()
+```
+
+::: {.callout-tip}
+- If your file has a xlx or xlsx extensions, you can use othe functions `read_excel()` from readxl package.
+:::
+
+
+## Clean column names with `janitor::clean_names()`
+
+Complete the following code by filling in the missing function name, `???`, to clean column names.
+
+```{r}
+coffee_sale <- raw_coffee_sale |> janitor::clean_names()
+coffee_sale
+```
+
+::: {.callout-note}
+## Why clean names?
+Consistent `snake_case` names avoid quoting and weird characters; they also make data analysis easeir.
+:::
+
+
+## Check if the data is tidy
+
+**Tidy rules:**
+
+- Each **variable** in a column  
+- Each **observation** in a row  
+- Each **value** in a cell
+
+```{r}
+coffee_sale
+```
+
+- Inspect data structure and column types! 
+
+   - What is the structure of this data?
+   - How many rows and columns?
+   - What are the column data types?
+
+- Which columns might need type conversion before analysis — and why?
+
+::: {.callout-caution}
+If your file stores **months as columns**, or puts **multiple concepts in one column** (e.g., `"2x Latte"`), reshape or split the data so that **quantity** and **product** become separate variables.
+:::
+
+## Data-quality checks
+
+You can use `skim()` fucntion from `skimr` package which helps you immediately spot potential issues
+
+```{r}
+skimr::skim(coffee_sale)
+
+coffee_sale
+```
+
+
+::: {.callout-important}
+## Rules to validate (adapt to your columns):
+
+- **No negative** `quantity`, `money`  
+
+- **Date/time within operating hours** (e.g., 06:00–20:00)  
+
+- **Product names not missing**
+:::
+
+## Write outputs
+
+Sometime, you may need to save a cleaned or transformed version of your data for later use. You can write out to CSV or RDS formats.
+
+```{r}
+coffee_selected <- coffee_sale |> select(coffee_name,date, time, money)
+readr::write_csv(coffee_selected, "../data/coffee_sales_clean.csv")
+readr::write_rds(coffee_selected, "../data/coffee_sales_clean.rds")
+
+```
+
+::: {.callout-tip}
+- Use **CSV** for tool interoperability (e.g., Excel, Python).  
+- Use **RDS** to preserve R types, factors, and dates without guessing on re‑load.
+:::
+
+---
+
+## (Optional) Read multiple files and combine
+
+Which fucntions would you use if you want to read multiple files and combine them into one dataframe? 
+
+```{r}
+sales_files <- c(
+  "https://pos.it/r4ds-01-sales",
+  "https://pos.it/r4ds-02-sales",
+  "https://pos.it/r4ds-03-sales"
+)
+read_csv(sales_files, id = "file")
+ 
+```

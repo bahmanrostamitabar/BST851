@@ -1,0 +1,526 @@
+---
+title: "Tutorial 9 - Forecasting"
+author: 
+  - name: "Bahman Rostami-Tabar"
+    affiliation: "Professor, Director, Data Lab for Social Godo Reserach Group, Cardiff Business School"
+    affiliation-url: "https://profiles.cardiff.ac.uk/staff/rostami-tabarb"
+  - name: "Udeshi (Merennage) Salgado"
+    affiliation: "PhD student, Cardiff Business School"
+    affiliation-url: "https://profiles.cardiff.ac.uk/research-staff/salgadomum"  
+  - name: "Mustafa Aslan"
+    affiliation: "PhD student, Cardiff Business School"
+    affiliation-url: "https://profiles.cardiff.ac.uk/research-staff/aslanm"  
+date: 23 October 2025
+format:
+  html:
+    code-fold: true    # allow folding of code blocks
+    toc: true
+    toc-depth: 2
+  pdf: 
+    toc: true          # include a table of contents
+    number-sections: true
+execute:
+  cache: true          # cache code chunks
+  echo: true           # whether to show code
+  eval: false           # whether to run code
+  warning: false       # suppress warnings
+  message: false       # suppress messages
+---
+
+# Overview
+
+The tourism.csv dataset contains quarterly estimates of domestic tourism activity across Australia. Each row corresponds to a specific tourism region, state, and trip purpose during a given quarter, along with an estimate of the number of trips taken. The data begin in 1998 and include several trip purposes such as Business, Holiday, and Visiting friends or relatives. The variable Trips measures the total number of trips recorded for that category in the given quarter. This dataset is commonly used for demonstrating forecasting methods involving hierarchical structures, seasonal patterns, and disaggregation by purpose and region.
+
+The file contains quarterly tourism data with five columns:
+
+- Quarter — quarterly date of the observation
+- Region — tourism region within Australia
+- State — Australian state or territory
+- Purpose — purpose of travel (e.g., Business, Holiday)
+- Trips — estimated number of trips during the quarter
+
+
+```{python}
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+from plotnine import *
+from statsforecast import StatsForecast
+from statsforecast.models import (
+    SeasonalNaive,
+    Naive,
+    HistoricAverage,
+    AutoETS,
+    AutoARIMA)
+
+from utilsforecast.evaluation import (
+    evaluate
+)
+
+tourism = pd.read_csv("data/tourism.csv")
+```
+
+# Run the code
+
+## Convert ot tsibble
+
+We begin by reading the tourism dataset and converting the Quarter column into a proper quarterly date format using `PeriodIndex` from `pandas`. This ensures that time-based operations recognize the data's quarterly frequency.
+
+The index is the time variable (Quarter) and each unique combination of Region, State, and Purpose becomes its own time series via the key.
+
+
+```{python}
+# Convert Quarter to quarterly Period index
+tourism["Quarter"] = pd.PeriodIndex(tourism["Quarter"], freq="Q")
+tourism_ts = (
+    tourism
+    .set_index(["Region", "State", "Purpose", "Quarter"])
+    .sort_index().reset_index()[["Quarter", "Region", "State", "Purpose", "Trips"]] # to order columns back
+)
+```
+
+## Calculate total toursime
+
+This step aggregates all tourism trips across every region, state, and purpose into a single national measure of quarterly tourism.
+
+We group the data by Quarter and compute the total number of trips, creating a univariate time series useful for modeling and forecasting overall tourism demand.
+
+
+```{python}
+total_tourism = (
+    tourism_ts
+    .reset_index()                  # bring keys + Quarter back as columns
+    .groupby("Quarter")["Trips"]    # index_by(Quarter)
+    .sum()                           # summarise(TotalTrips = sum(Trips))
+    .reset_index(name="TotalTrips")
+)
+```
+
+We visualize the total trips over time to inspect long-term trends and seasonal patterns.
+This helps verify data quality and provides intuition before fitting any model.
+
+```{python}
+total_tourism.plot(x="Quarter", y="TotalTrips", figsize=(10, 6), legend=False)
+plt.grid(True)
+plt.ylabel("Total Trips")
+plt.show()
+```
+
+## Specify and estimate multiple models
+
+The `Nixtla`s `statsforecast` framework provides a unified workflow for fitting many kinds of time series models. Regardless of whether the model is simple (naïve), statistical (ARIMA), or decomposition-based (ETS), the fitting process follows the same pattern:
+
+- You begin with a df containing a time index `ds` and a response variable `y` (as required by StatsForecast).
+- You create a list of model instances from the `statsforecast.models` module.
+- Inside the list, you specify each model along with any necessary parameters (e.g., seasonal period).
+
+The result is a `StatsForecast` object that encapsulates all specified models.
+
+This structure makes it easy to compare multiple models, generate forecast distributions, and evaluate accuracy using a consistent interface.
+
+
+```{python}
+models = [
+    SeasonalNaive(season_length=4),   # SNAIVE
+    Naive(),                          # NAIVE
+    HistoricAverage(),                # MEAN
+    AutoETS(season_length=4),             # ETS
+    AutoARIMA(season_length=4),       # ARIMA
+]
+```
+
+Using the aggregated TotalTrips time series, we estimate several forecasting models at once.
+Each model reflects a different assumption about how tourism behaves over time:
+
+- `SNAIVE(TotalTrips)`: Assumes that each quarter repeats the value from the same quarter last year. A good benchmark for strongly seasonal data.
+
+- `NAIVE(TotalTrips)`: Forecasts the next value using the most recent observation. Useful for series that follow a random-walk-like pattern.
+
+- `MEAN(TotalTrips)`: Uses the historical average as the forecast for all future periods. A simple baseline for comparison.
+
+- `ETS(TotalTrips)`: Fits an exponential smoothing model, automatically selecting the best combination of error, trend, and seasonal components.
+
+- `ARIMA(TotalTrips)`: Fits an autoregressive integrated moving average model with automated order selection, capturing autocorrelation and differencing structure.
+
+- `TSLM(TotalTrips ~ trend() + season())`:Fits a regression model with a linear trend and quarterly seasonal dummy variables.
+
+## Generate forecasts for the next 6 periods
+
+
+```{python}
+# Convert your data to StatsForecast format
+df = total_tourism.rename(columns={
+    "Quarter": "ds",
+    "TotalTrips": "y"
+})
+
+df["unique_id"] = "total_tourism"
+
+# StatsForecast requires Timestamp, not Period
+df["ds"] = df["ds"].dt.to_timestamp()
+
+df = df[["unique_id", "ds", "y"]]
+
+unfit_models = StatsForecast(
+    models=models, # list of models
+    freq='Q',       # frequency of the data
+    n_jobs=-1      # use all available cores
+)
+
+# optional: forecast next 6 periods  # optinal if you want to fit first and then forecast
+# fitted_models = fit_models.fit(df) 
+
+# forecast next 6 periods if you are interested in fitted values as well
+# fcst = fit_models.forecast(df=df, fitted= True, h=6) 
+levels = [80, 90, 95, 99] # confidence levels of the prediction intervals
+fcst = unfit_models.forecast(df=df, h=6, level=levels, fitted=True)
+```
+
+Once the models are fitted, the next task is to project the series into the future.
+The `forecast()` function takes the estimated models and produces forecasts for the next `h` time periods — in this case, six future quarters of total tourism.
+
+If `fitted=True` is specified, the function also returns fitted values for the historical data alongside the forecasts.
+
+- the point forecast of each model is contained in a column named with the model name (e.g., AutoETS)
+- It also generates prediction intervals computed using conformal prediction. lower and upper bounds for each specified confidence level (e.g., .SeasonalNaive-lo-80, .SeasonalNaive-hi-80 for the 80% interval).
+- the forecast time index, extending the original series into the future.
+
+
+Each model produces forecasts according to the assumptions underlying its structure.
+
+By collecting forecasts for all models at once, we can later compare their behaviour, visualize their uncertainty, and compute accuracy metrics once actual data become available
+
+## Get fitted values from the model
+
+```{python}
+fitted_ets = unfit_models.forecast_fitted_values()[["ds", "AutoETS"]]
+```
+
+
+Every forecasting model not only produces forecasts for future periods but also gives fitted values for the historical data.
+Fitted values are the model’s best estimates of what the series should have been at each past observation, according to the patterns it has learned (trend, seasonality, autocorrelation, etc.).
+
+In this step, we:
+
+Select one model from the collection of fitted models using `.forecast_fitted_values()[["ds", "AutoETS"]]`
+
+This isolates the exponential smoothing (ETS) model from the full model table.
+
+These fitted values help us evaluate how well the ETS model captures the underlying structure of total tourism. They can be visualized to compare the model’s behavior with the observed data.
+
+## Plot the forecast distribution along with fitted values and actual data for multiple models
+
+
+```{python}
+(
+    ggplot() +
+    
+    # Forecast interval (Python equivalent of R stat_halfeye)
+    geom_ribbon(
+        aes(x="ds", ymin="AutoETS-lo-99", ymax="AutoETS-hi-99"),
+        data=fcst,
+        fill="grey",
+        alpha=0.3
+    ) +
+    
+    # Forecast mean
+    geom_line(
+        aes(x="ds", y="AutoETS"),
+        data=fcst
+    ) +
+    
+    # Fitted values
+    geom_line(
+        aes(x="ds", y="AutoETS"),
+        data=fitted_ets
+    ) +
+    geom_point(
+        aes(x="ds", y="AutoETS"),
+        data=fitted_ets
+    ) +
+    
+    # Actual data
+    geom_line(
+        aes(x="ds", y="y"),
+        data=df
+    ) +
+    geom_point(
+        aes(x="ds", y="y"),
+        data=df
+    ) +
+    
+    scale_color_manual(
+        name=None,
+        breaks=["Fitted", "Data", "Point Forecast"],
+        values={
+            "Fitted": "#E69F00",
+            "Data": "#0072B2",
+            "Point Forecast": "#000000"
+        }
+    ) +
+    
+    labs(x="Quarter", y="Total Trips") +
+    theme_bw()
+)
+```
+
+## Extract prediction interval
+
+The `level` argument in the `forecast()` function specifies the confidence levels for the prediction intervals to be generated for each forecast.
+By default, no prediction intervals are computed unless levels are explicitly provided.
+
+```{python}
+levels = [80, 90, 95, 99] # confidence levels of the prediction intervals
+fcst = unfit_models.forecast(df=df, h=6, level=levels) # prediction intervals for the forecasts
+```
+
+
+# Fill in blanks
+
+## Time Series Cross-Validation
+
+Time series cross-validation evaluates model performance by training on progressively expanding windows while respecting the order of observations. This avoids leakage of future information and provides a realistic assessment of forecast accuracy.
+
+We first define the forecast horizon.
+
+In this step, we split the aggregated total tourism series into a training set and a test set, using a fixed proportion of the most recent data for evaluation.
+
+We first specify that 30% of the data should be held out for testing. To create the test set, we identify the most recent 30% of quarters and keep only those observations. This means:
+
+- We compute how many quarters correspond to 30% of the dataset.
+- Then we select that many quarters from the end of the series.
+- The test set contains only these most recent observations.
+
+Next, we create the training set using the remaining (older) 70% of the data. This means:
+
+- We take all observations from the beginning of the series up to the start of the test period.
+- These observations form the training data used to fit our forecasting models.
+
+Why we do this:
+
+The goal is to evaluate forecasting models on data not used for training, mimicking how forecasts perform on future unseen data. This train/test split preserves the time order, preventing leakage and ensuring a valid evaluation of forecasting accuracy.
+
+
+
+```{python}
+# Forecast horizon and test proportion
+forecast_horizon = 6
+percentage_test = 0.3
+
+# Make a copy and ensure the time column is in a convenient type
+df = total_tourism.copy()
+
+# Convert total_tourism into StatsForecast format
+df_sf = (
+    total_tourism
+        .rename(columns={
+            "Quarter": "ds",
+            "TotalTrips": "y"
+        })
+        .assign(unique_id="total_tourism")
+)
+
+# Ensure ds is Timestamp (StatsForecast requirement)
+df_sf["ds"] = df_sf["ds"].dt.to_timestamp()
+
+# Reorder columns (mandatory)
+df_sf = df_sf[["unique_id", "ds", "y"]]
+
+# Compute number of test observations (30% of total)
+n_periods = len(df_sf)
+test_size = int(round(percentage_test * n_periods))
+
+# Split: last 30% as test, rest as train (respecting time order)
+test = df_sf.tail(test_size).reset_index(drop=True)
+train = df_sf.head(n_periods - test_size).reset_index(drop=True)
+
+```
+
+## Rolling-Origin Resamples
+
+This code creates a rolling-origin time series cross-validation (TSCV) object using the aggregated total_tourism data.
+
+
+```{python}
+# Drop the last forecast_horizon points for the CV construction
+df_cv = df.iloc[:-forecast_horizon].reset_index(drop=True)
+
+def rolling_origin_splits(n_obs, initial_window, horizon, step=1):
+    """
+    Generate (train_idx, test_idx) pairs for rolling-origin CV.
+    - initial_window: number of observations in first training set
+    - horizon: forecast horizon length
+    - step: how much to expand the training window each time
+    """
+    splits = []
+    train_end = initial_window
+    while train_end + horizon <= n_obs:
+        train_idx = np.arange(0, train_end)
+        test_idx = np.arange(train_end, train_end + horizon)
+        splits.append((train_idx, test_idx))
+        train_end += step
+    return splits
+
+initial_window = len(train)   # same idea as .init = length(unique(train$Quarter))
+splits = rolling_origin_splits(
+    n_obs=len(df_cv),
+    initial_window=initial_window,
+    horizon=forecast_horizon,
+    step=1
+)
+```
+
+## Fit Models
+
+We fit multiple forecasting models to each rolling-origin resample and collect their forecasts for evaluation.
+
+```{python}
+from statsforecast import StatsForecast
+from statsforecast.models import Naive, SeasonalNaive, AutoARIMA, AutoETS
+
+# Define models
+models = [
+    Naive(),
+    SeasonalNaive(season_length=4),
+    AutoARIMA(),
+    AutoETS(),
+]
+
+# Create StatsForecast object
+sf = StatsForecast(
+    models=models,
+    freq='Q',
+    n_jobs=-1
+)
+
+# Rolling-origin cross-validation
+cv_results = sf.cross_validation(
+    df=train,          # your df with unique_id, ds, y
+    h=6,               # forecast horizon
+    step_size=1,       # equivalent to stretch_tsibble(step = 1)
+    level=[95]         # specify prediction interval levels if needed
+)
+
+cv_results
+
+```
+
+## Forecasting
+
+Genearte forecasts for the next 6 periods using the fitted models from the rolling-origin resamples.
+
+```{python}
+levels = [80, 90, 95]
+
+final_forecasts = sf.forecast(
+    df=train,
+    h=forecast_horizon,
+    level=levels
+)
+```
+
+## Accuracy Evaluation
+
+The `evaluate()` function compares:
+
+- the forecasts generated by each model, and
+- the actual observed values in total_tourism.
+
+This is how we evaluate how well each model performed. The function aligns forecasts with the corresponding actual observations and computes accuracy measures for every model.
+
+We calculate three families of accuracy metrics:
+
+1. Point accuracy measures: These assess how close the forecast mean is to the actual values using measure such as ME (Mean Error), RMSE (Root Mean Squared Error), MAE (Mean Absolute Error), etc
+
+2. Interval accuracy measures: These assess the quality of prediction intervals, such as: winkler score (interval score)
+
+3. Distribution accuracy measures: These evaluate the entire forecast distribution, not just points or intervals: CRPS (Continuous Ranked Probability Score), and pinball score (quantile loss)
+
+By including all three groups, we evaluate not just point forecasts but the uncertainty estimates as well.
+
+```{python}
+# Define point evaluation metrics
+import numpy as np
+import pandas as pd
+
+def mae(y, yhat):
+    return np.mean(np.abs(y - yhat))
+
+def rmse(y, yhat):
+    return np.sqrt(np.mean((y - yhat)**2))
+
+def mse(y, yhat):
+    return np.mean((y - yhat)**2)
+
+def mape(y, yhat):
+    return np.mean(np.abs((y - yhat) / y)) * 100
+
+def smape(y, yhat):
+    return np.mean(2 * np.abs(y - yhat) / (np.abs(y) + np.abs(yhat))) * 100
+
+```
+
+```{python}
+models = ['Naive', 'SeasonalNaive', 'AutoARIMA', 'AutoETS']
+
+results = []
+
+for m in models:
+    y = cv_results['y']
+    yhat = cv_results[m]
+
+    results.append({
+        "model": m,
+        "MAE": mae(y, yhat),
+        "RMSE": rmse(y, yhat),
+        "MSE": mse(y, yhat),
+        "MAPE": mape(y, yhat),
+        "SMAPE": smape(y, yhat)
+    })
+
+point_metrics = pd.DataFrame(results)
+point_metrics
+```
+
+
+if you want to calculate quantile score only for an specific probability you can use the following code:
+
+```{python}
+# Define quntile loss
+def quantile_loss(y, yhat, q):
+    return np.mean(np.maximum(q*(y - yhat), (q-1)*(y - yhat)))
+```
+
+```{python}
+q = 0.95
+
+interval_metrics = []
+
+y = cv_results['y']
+yhat = cv_results["AutoETS-hi-95"]  # your column name must match your forecasts
+
+interval_metrics.append({
+    "model": "AutoETS",
+    "quantile": q,
+    "quantile_loss": quantile_loss(y, yhat, q)
+})
+
+interval_metrics = pd.DataFrame(interval_metrics)
+interval_metrics
+
+```
+
+
+# No Code
+
+
+1. Using the time series cross-validation result, instad of reporting resuls as total average, report the accuracy measures for each rolling-origin resample and each model. Visualise how the selected accuracy measure (e.g., RMSE) varies. This will help understand the stability of model performance over time.
+
+2. Using the time series cross-validation result, report the resuls for the forecast horizon.s separately. Visualise how the selected accuracy measure (e.g., RMSE) varies by forecast horizon for each model. This will help understand how model performance changes as the forecast horizon increases.
+
+
+3. For the forecasting method with the mimimum seelcted measure (e.g., RMSE) from time series cross validation, visualise the forecasting distribution along with the fitted values and actual data. To do this, first leave out 6 periods from the end of the data as a test set. Then, fit the selected model to the training set and generate forecasts for the test set period. Finally, plot the forecast distribution, fitted values, and actual data for comparison.
+
+
+
+4. Now, let's generate 1000 bootstrap samples of the original time series data and fit the selected forecasting model (e.g., ETS) to each bootstrap sample. Then, generate forecasts for each bootstrap sample and visualise the forecast distribution along with the fitted values and actual data.
